@@ -1,0 +1,22 @@
+{
+  "name": "job-composer",
+  "version": "0.1.0",
+  "description": "Internal tool for Aikyam Jobs: formats job/company posts via Claude Code and reviews before pushing to Strapi",
+  "private": true,
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "poll": "node src/poll-once.js",
+    "suggest-revision": "node src/suggest-revision.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "html-to-text": "^9.0.5"
+  }
+}

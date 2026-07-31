@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aikyam Jobs — Composer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Aikyam Jobs Composer</h1>
+    <p class="subtitle">Paste a job/company source below. Review and edit the output. Push it to Strapi as a draft, or copy fields in manually.</p>
+  </header>
+
+  <main>
+    <section class="input-panel">
+      <div class="type-toggle">
+        <label><input type="radio" name="type" value="job" checked> Job</label>
+        <label><input type="radio" name="type" value="company"> Company</label>
+      </div>
+      <textarea id="sourceInput" placeholder="Paste the raw job description text, or a bare URL to the source page..." rows="12"></textarea>
+      <button id="formatBtn">Format</button>
+      <span id="status"></span>
+    </section>
+
+    <section id="results" class="results-panel" hidden>
+      <h2>Review before pasting into Strapi</h2>
+      <div id="reviewFlagsBanner" class="review-banner" hidden></div>
+
+      <div id="fieldsContainer"></div>
+
+      <h3>Description <span class="hint">(paste this into the job/company "description" field — use the Write tab, not Preview)</span></h3>
+      <div class="field-box">
+        <textarea id="descriptionBox" rows="20"></textarea>
+        <button class="copy-btn" data-copy-target="descriptionBox">Copy</button>
+      </div>
+
+      <div id="lookupPanel"></div>
+
+      <div class="push-panel">
+        <button id="pushBtn">Push to Strapi as Draft</button>
+        <span id="pushStatus"></span>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
