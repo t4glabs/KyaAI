@@ -182,3 +182,96 @@ button:disabled { opacity: 0.6; cursor: default; }
 #pushStatus a {
   color: var(--accent);
 }
+
+.subtitle a {
+  color: var(--accent);
+  margin-left: 0.5rem;
+}
+
+.stat-cards {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.stat-card {
+  flex: 1 1 160px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+
+.field-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.field-bar-row:last-child { border-bottom: none; }
+
+.field-bar-label {
+  flex: 0 0 140px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.field-bar-track {
+  flex: 1;
+  height: 10px;
+  background: var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.field-bar-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.field-bar-pct {
+  flex: 0 0 90px;
+  font-size: 0.8rem;
+  color: var(--fg);
+  text-align: right;
+}
+
+.prose h4 {
+  margin: 1rem 0 0.4rem;
+  font-size: 1rem;
+}
+.prose p, .prose li {
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.prose ul {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+}
+
+.badge-pill {
+  display: inline-block;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  vertical-align: middle;
+  margin-left: 0.5rem;
+}

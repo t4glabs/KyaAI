@@ -56,10 +56,10 @@ CLAUDE_BIN=claude
 npm start
 ```
 
-Open `http://localhost:4100` (or `http://<mac-mini-tailscale-name>:4100` from
-another device over Tailscale). The publish-poller starts automatically
-whenever `STRAPI_API_TOKEN` is set, checking every 30 minutes for pushed
-drafts that have since been published.
+Open `http://localhost:4100` (in production this is reached via a Cloudflare
+Tunnel URL instead — see `MAC_MINI_SETUP.md`). The publish-poller starts
+automatically whenever `STRAPI_API_TOKEN` is set, checking every 30 minutes
+for pushed drafts that have since been published.
 
 To run the poller once by hand (e.g. from cron, or to check right after
 publishing something instead of waiting up to 30 minutes):
@@ -132,19 +132,33 @@ To approve a proposal: read it, and if it looks right, remove the
 prompt" workflow — drafting the revision is Claude's job, approving it is
 Jinso's, and there's no manual prompt-writing in between.
 
+## Seeing what's actually happening (Insights page)
+
+`http://localhost:4100/insights.html` (linked from the Composer page) shows,
+for Job and Company separately:
+
+- **Activity counts** — total runs logged, how many pushed to Strapi, how
+  many confirmed published.
+- **Field-level edit-frequency** — for every captured run, how often each
+  field differs between the AI's original draft and what actually got
+  published (e.g. "excerpt changed in 8 of 12 runs"). This is a plain JSON
+  comparison computed in code — **no Claude call happens when you load this
+  page**, so it's free to check as often as you like.
+- **The current active prompt's own changelog**, read straight from its
+  file.
+- **Any pending `suggest-revision` proposal**, if one exists and hasn't been
+  approved or dismissed yet, with its pattern-analysis section shown inline.
+
+This page is read-only by design — it doesn't let you approve a prompt
+proposal from the browser. That stays a deliberate file-rename step (see
+above): infrequent, high-stakes, and meant to be read carefully rather than
+clicked through.
+
 ## Running it 24/7 on the Mac Mini
 
-Simplest option — macOS's own service manager, `launchd`:
-
-1. Create `~/Library/LaunchAgents/space.aikyam.job-composer.plist` pointing
-   `ProgramArguments` at `node /path/to/KyaAI/src/server.js`, with
-   `RunAtLoad` and `KeepAlive` set to true, and `WorkingDirectory` set to
-   the project folder (so `.env` and `data/` resolve correctly).
-2. `launchctl load ~/Library/LaunchAgents/space.aikyam.job-composer.plist`
-
-(If you'd rather reuse PM2 like the aikyamjobs VPS does, that works too —
-`pm2 start src/server.js --name job-composer` — just make sure `pm2 save` +
-`pm2 startup` are set so it survives a reboot.)
+See `MAC_MINI_SETUP.md` for the full checklist — `launchd` to keep the
+process running, and a Cloudflare Tunnel (not Tailscale/VPN) so Greeshma and
+Senti just open a normal HTTPS URL with nothing installed on their end.
 
 ## Testing without touching the real site
 

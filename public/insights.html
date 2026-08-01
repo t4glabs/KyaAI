@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aikyam Jobs — Insights</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Insights</h1>
+    <p class="subtitle">
+      What's actually happening with the AI drafts, and how the prompt has evolved.
+      <a href="index.html">← Back to Composer</a>
+    </p>
+  </header>
+
+  <main>
+    <div class="type-toggle input-panel">
+      <label><input type="radio" name="insightsType" value="job" checked> Job</label>
+      <label><input type="radio" name="insightsType" value="company"> Company</label>
+    </div>
+
+    <section class="results-panel">
+      <h2>Activity</h2>
+      <div id="activityCards" class="stat-cards"></div>
+    </section>
+
+    <section class="results-panel">
+      <h2>How often does each field get edited?</h2>
+      <p class="hint">
+        Comparing the AI's original draft against what actually got published.
+        Computed directly from logged data — no AI involved in this number.
+      </p>
+      <div id="fieldStats"></div>
+      <div id="descriptionStat" class="field-box"></div>
+    </section>
+
+    <section class="results-panel">
+      <h2>Current prompt</h2>
+      <p id="currentVersion" class="hint"></p>
+      <div id="changelog" class="prose"></div>
+    </section>
+
+    <section class="results-panel" id="proposalSection" hidden>
+      <h2>Pending revision proposal <span class="badge-pill">Awaiting review</span></h2>
+      <p class="hint" id="proposalFileName"></p>
+      <div id="proposalAnalysis" class="prose"></div>
+      <p class="hint">
+        To approve or reject: read the full proposal file on the server, then
+        either rename it (removing <code>.proposed</code>) and update
+        <code>PROMPT_FILES</code> in <code>src/lib/promptLoader.js</code>, or
+        delete it to dismiss. See the README's "Improving the prompts"
+        section for details.
+      </p>
+    </section>
+  </main>
+
+  <script src="insights.js"></script>
+</body>
+</html>
