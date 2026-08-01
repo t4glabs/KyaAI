@@ -19,7 +19,7 @@ function formatWhen(iso) {
 function render(check) {
   if (!check) {
     checkMeta.textContent = 'No check has been run yet.';
-    progressBar.hidden = true;
+    progressBar.style.display = 'none';
     summary.textContent = '';
     brokenList.innerHTML = '';
     return;
@@ -28,9 +28,13 @@ function render(check) {
   const isRunning = check.status === 'running';
   startBtn.disabled = isRunning;
 
-  checkMeta.textContent = isRunning
-    ? `Running — started ${formatWhen(check.started_at)}`
-    : `Last checked ${formatWhen(check.finished_at)} (started ${formatWhen(check.started_at)})`;
+  if (check.error) {
+    checkMeta.innerHTML = `<span class="lookup-new">Failed: ${escapeHtml(check.error)}</span>`;
+  } else {
+    checkMeta.textContent = isRunning
+      ? `Running — started ${formatWhen(check.started_at)}`
+      : `Last checked ${formatWhen(check.finished_at)} (started ${formatWhen(check.started_at)})`;
+  }
 
   // Not using the `hidden` attribute here: .field-bar-row sets display:flex
   // in CSS, which beats the browser's default [hidden]{display:none} rule

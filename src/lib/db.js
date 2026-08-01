@@ -51,7 +51,8 @@ db.exec(`
     started_at TEXT NOT NULL,
     finished_at TEXT,
     total INTEGER NOT NULL,
-    status TEXT NOT NULL DEFAULT 'running'  -- 'running' | 'done'
+    status TEXT NOT NULL DEFAULT 'running',  -- 'running' | 'done'
+    error TEXT                               -- set if the check failed before producing any results
   );
 `);
 
@@ -83,6 +84,11 @@ for (const [column, sqlType] of Object.entries(NEW_COLUMNS)) {
   if (!existingColumns.has(column)) {
     db.exec(`ALTER TABLE runs ADD COLUMN ${column} ${sqlType}`);
   }
+}
+
+const existingLinkCheckColumns = new Set(db.prepare('PRAGMA table_info(link_checks)').all().map((c) => c.name));
+if (!existingLinkCheckColumns.has('error')) {
+  db.exec(`ALTER TABLE link_checks ADD COLUMN error TEXT`);
 }
 
 function insertRun({ type, promptVersion, sourceText, metadata, description }) {
@@ -196,9 +202,14 @@ function startLinkCheck(total) {
   return info.lastInsertRowid;
 }
 
-function finishLinkCheck(checkId) {
-  db.prepare(`UPDATE link_checks SET finished_at = ?, status = 'done' WHERE id = ?`)
-    .run(new Date().toISOString(), checkId);
+function finishLinkCheck(checkId, error) {
+  db.prepare(`UPDATE link_checks SET finished_at = ?, status = 'done', error = ? WHERE id = ?`)
+    .run(new Date().toISOString(), error || null, checkId);
+}
+
+/** Set once the job list has actually been fetched — total starts at 0 so the UI shows "running" immediately. */
+function setLinkCheckTotal(checkId, total) {
+  db.prepare(`UPDATE link_checks SET total = ? WHERE id = ?`).run(total, checkId);
 }
 
 function addLinkCheckResult(checkId, { jobId, title, slug, applicationUrl, ok, statusCode, error }) {
@@ -243,6 +254,7 @@ module.exports = {
   resetAllSourceChecks,
   isLinkCheckRunning,
   startLinkCheck,
+  setLinkCheckTotal,
   finishLinkCheck,
   addLinkCheckResult,
   getLatestLinkCheck,

@@ -137,7 +137,11 @@ async function getAllPublishedJobsWithApplicationUrl() {
   while (true) {
     const params = new URLSearchParams();
     params.set('filters[publishedAt][$notNull]', 'true');
-    params.set('fields', 'title,applicationUrl,slug');
+    // Strapi's `fields` param needs array bracket notation — a comma-joined
+    // string (fields=a,b,c) is rejected outright with a 400 ValidationError.
+    params.set('fields[0]', 'title');
+    params.set('fields[1]', 'applicationUrl');
+    params.set('fields[2]', 'slug');
     params.set('pagination[page]', String(page));
     params.set('pagination[pageSize]', String(pageSize));
 

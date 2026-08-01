@@ -1,5 +1,11 @@
 const { getAllPublishedJobsWithApplicationUrl } = require('./strapi');
-const { isLinkCheckRunning, startLinkCheck, finishLinkCheck, addLinkCheckResult } = require('./db');
+const {
+  isLinkCheckRunning,
+  startLinkCheck,
+  setLinkCheckTotal,
+  finishLinkCheck,
+  addLinkCheckResult,
+} = require('./db');
 
 const TIMEOUT_MS = 10_000;
 const CONCURRENCY = 5;
@@ -54,8 +60,20 @@ async function runLinkCheck() {
     throw new Error('A link check is already running');
   }
 
-  const jobs = await getAllPublishedJobsWithApplicationUrl();
-  const checkId = startLinkCheck(jobs.length);
+  // Created immediately (before we even know how many jobs there are) so the
+  // UI shows "running" right away instead of looking stuck while the job
+  // list itself is being fetched — and so a failure at that step still has
+  // somewhere to record itself instead of vanishing into a rejected promise.
+  const checkId = startLinkCheck(0);
+
+  let jobs;
+  try {
+    jobs = await getAllPublishedJobsWithApplicationUrl();
+  } catch (err) {
+    finishLinkCheck(checkId, `Could not fetch the job list from Strapi: ${err.message}`);
+    throw err;
+  }
+  setLinkCheckTotal(checkId, jobs.length);
 
   let index = 0;
   async function worker() {
