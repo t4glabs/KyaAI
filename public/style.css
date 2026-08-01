@@ -275,3 +275,56 @@ button:disabled { opacity: 0.6; cursor: default; }
   vertical-align: middle;
   margin-left: 0.5rem;
 }
+
+.sources-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.sources-header h2 { margin: 0; }
+.sources-header button { margin: 0; }
+.sources-header .hint { margin-right: 0.75rem; }
+
+.source-category {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 1rem 0 0.4rem;
+}
+.source-category:first-child { margin-top: 0.5rem; }
+
+.source-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.source-row:last-child { border-bottom: none; }
+.source-row a { color: var(--fg); flex: 1; }
+.source-row.source-done a { color: var(--muted); text-decoration: line-through; }
+.source-row button { margin: 0; }
+
+.add-source-form, .dup-check-form {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+.add-source-form input, .dup-check-form input {
+  flex: 1 1 180px;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+.add-source-form button, .dup-check-form button {
+  margin: 0;
+  flex: 0 0 auto;
+}

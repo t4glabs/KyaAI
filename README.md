@@ -25,6 +25,14 @@ addressing them. Jinso never has to draft the revised wording himself — he
 reviews the analysis and the full proposed file, and approving it is just a
 rename + a one-line pointer update in `promptLoader.js`, not a rewrite.
 
+**Also included:** a Sources tab (`sources.html`) — a daily checklist of
+reference links (LinkedIn searches, DevNetJobsIndia, career pages, the
+Tally form inbox) with a "start new round" reset, and a duplicate-check
+tool that searches our own Strapi data (never the source sites) for
+"has this already been posted?" before spending time formatting it. This
+never fetches or scrapes content from any third-party site — it only
+stores links you add yourself, and only searches data we already own.
+
 ## Requirements
 
 - Node.js 20+

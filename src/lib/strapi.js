@@ -85,6 +85,44 @@ async function checkCompany(name) {
 }
 
 /**
+ * Searches existing Job/Company entries by partial, case-insensitive name
+ * match against Strapi's own data — never touches LinkedIn/DevNetJobsIndia
+ * or any third-party site. Powers the "has this already been posted?"
+ * quick check, so Greeshma can tell before she spends time formatting
+ * something that's already on the site.
+ */
+async function searchJobs({ title, companyName } = {}) {
+  const params = new URLSearchParams();
+  if (title) params.set('filters[title][$containsi]', title);
+  if (companyName) params.set('filters[company][name][$containsi]', companyName);
+  params.set('populate', 'company');
+  params.set('pagination[pageSize]', '10');
+
+  const data = await strapiGet(`/jobs?${params.toString()}`);
+  return (data.data || []).map((entry) => ({
+    id: entry.id,
+    title: entry.attributes.title,
+    companyName: entry.attributes.company?.data?.attributes?.name ?? null,
+    slug: entry.attributes.slug,
+    publishedAt: entry.attributes.publishedAt,
+  }));
+}
+
+async function searchCompanies(name) {
+  const params = new URLSearchParams();
+  params.set('filters[name][$containsi]', name || '');
+  params.set('pagination[pageSize]', '10');
+
+  const data = await strapiGet(`/companies?${params.toString()}`);
+  return (data.data || []).map((entry) => ({
+    id: entry.id,
+    name: entry.attributes.name,
+    slug: entry.attributes.slug,
+    publishedAt: entry.attributes.publishedAt,
+  }));
+}
+
+/**
  * Looks up a category by name; creates it (name + slug only, no description —
  * matches the existing create-missing-categories.js convention) if missing.
  * Categories are low-stakes shared taxonomy, so auto-create on push is fine.
@@ -315,4 +353,6 @@ module.exports = {
   upsertCompanyDraft,
   adminEditUrl,
   getEntrySnapshot,
+  searchJobs,
+  searchCompanies,
 };

@@ -34,6 +34,17 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    label TEXT NOT NULL,       -- e.g. "LinkedIn — NGO Program Manager roles"
+    url TEXT NOT NULL,         -- the actual link to open — a reference, never fetched by this tool
+    category TEXT,             -- freeform grouping, e.g. "LinkedIn", "DevNetJobsIndia", "Career page"
+    created_at TEXT NOT NULL,
+    checked_at TEXT            -- set when marked done for the current round; cleared on reset
+  );
+`);
+
 // CREATE TABLE IF NOT EXISTS won't add columns to a table that already
 // existed from an earlier version of this tool — add any missing ones.
 const NEW_COLUMNS = {
@@ -123,4 +134,42 @@ function listPushedRuns() {
   `).all();
 }
 
-module.exports = { db, insertRun, markPushed, markPublished, getRun, listRuns, listPushedRuns };
+function addSource({ label, url, category }) {
+  const info = db.prepare(`
+    INSERT INTO sources (label, url, category, created_at)
+    VALUES (@label, @url, @category, @createdAt)
+  `).run({ label, url, category: category || null, createdAt: new Date().toISOString() });
+  return info.lastInsertRowid;
+}
+
+function listSources() {
+  return db.prepare('SELECT * FROM sources ORDER BY category IS NULL, category, label').all();
+}
+
+function deleteSource(id) {
+  db.prepare('DELETE FROM sources WHERE id = ?').run(id);
+}
+
+function setSourceChecked(id, checked) {
+  db.prepare('UPDATE sources SET checked_at = ? WHERE id = ?').run(checked ? new Date().toISOString() : null, id);
+}
+
+/** The "start a new round" button — clears every checkmark at once. */
+function resetAllSourceChecks() {
+  db.prepare('UPDATE sources SET checked_at = NULL').run();
+}
+
+module.exports = {
+  db,
+  insertRun,
+  markPushed,
+  markPublished,
+  getRun,
+  listRuns,
+  listPushedRuns,
+  addSource,
+  listSources,
+  deleteSource,
+  setSourceChecked,
+  resetAllSourceChecks,
+};

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aikyam Jobs — Sources</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Sources</h1>
+    <p class="subtitle">
+      Your daily checklist of where to look, and a quick check for whether
+      something's already on the site.
+      <a href="index.html">Composer</a> · <a href="insights.html">Insights</a>
+    </p>
+  </header>
+
+  <main>
+    <section class="results-panel">
+      <div class="sources-header">
+        <h2>Today's checklist</h2>
+        <div>
+          <span id="checklistProgress" class="hint"></span>
+          <button id="resetBtn">Start new round</button>
+        </div>
+      </div>
+      <p class="hint">
+        These are just links — clicking one opens it in a new tab. Nothing
+        on this page fetches or reads content from LinkedIn, DevNetJobsIndia,
+        or any other site.
+      </p>
+      <div id="sourcesList"></div>
+
+      <h3>Add a source</h3>
+      <div class="add-source-form">
+        <input id="newLabel" type="text" placeholder="Label, e.g. LinkedIn — NGO Program Manager roles">
+        <input id="newUrl" type="text" placeholder="URL">
+        <input id="newCategory" type="text" placeholder="Category (optional), e.g. LinkedIn">
+        <button id="addSourceBtn">Add</button>
+      </div>
+    </section>
+
+    <section class="results-panel">
+      <h2>Has this already been posted?</h2>
+      <p class="hint">Searches only our own aikyamjobs.org data — not the source sites.</p>
+      <div class="type-toggle">
+        <label><input type="radio" name="checkType" value="job" checked> Job</label>
+        <label><input type="radio" name="checkType" value="company"> Company</label>
+      </div>
+      <div class="dup-check-form">
+        <input id="checkTitle" type="text" placeholder="Job title (or org name for Company)">
+        <input id="checkCompany" type="text" placeholder="Company name (job search only)">
+        <button id="checkBtn">Check</button>
+      </div>
+      <div id="checkResults"></div>
+    </section>
+  </main>
+
+  <script src="sources.js"></script>
+</body>
+</html>

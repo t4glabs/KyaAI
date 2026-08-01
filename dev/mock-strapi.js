@@ -33,10 +33,35 @@ function wrap(record) {
   return { id, attributes };
 }
 
-function findBySlugQuery(list, req) {
-  const slug = req.query?.filters?.slug?.$eq;
-  if (!slug) return list;
-  return list.filter((r) => r.slug === slug);
+/**
+ * Minimal stand-in for Strapi's filter query language — supports the two
+ * operators this tool actually uses: $eq (exact, e.g. slug lookups) and
+ * $containsi (case-insensitive partial match, e.g. duplicate-check search),
+ * including one level of relation nesting (company.name.$containsi).
+ */
+function applyFilters(list, req, companiesList) {
+  const filters = req.query?.filters;
+  if (!filters) return list;
+
+  return list.filter((record) => {
+    return Object.entries(filters).every(([field, condition]) => {
+      if (field === 'company' && condition.name) {
+        const company = (companiesList || []).find((c) => c.id === record.company);
+        const name = company ? company.name : '';
+        if (condition.name.$containsi !== undefined) {
+          return name.toLowerCase().includes(String(condition.name.$containsi).toLowerCase());
+        }
+        return true;
+      }
+      if (condition.$eq !== undefined) {
+        return record[field] === condition.$eq;
+      }
+      if (condition.$containsi !== undefined) {
+        return String(record[field] || '').toLowerCase().includes(String(condition.$containsi).toLowerCase());
+      }
+      return true;
+    });
+  });
 }
 
 function validationError(res, field, message) {
@@ -90,7 +115,7 @@ function applyPublishedAtDefault(data) {
 
 // --- categories ---
 app.get('/categories', (req, res) => {
-  res.json({ data: findBySlugQuery(categories, req).map(wrap) });
+  res.json({ data: applyFilters(categories, req).map(wrap) });
 });
 app.post('/categories', (req, res) => {
   if (!requireFields(req.body.data, ['name', 'slug'], res)) return;
@@ -102,7 +127,7 @@ app.post('/categories', (req, res) => {
 
 // --- companies ---
 app.get('/companies', (req, res) => {
-  res.json({ data: findBySlugQuery(companies, req).map(wrap) });
+  res.json({ data: applyFilters(companies, req).map(wrap) });
 });
 app.post('/companies', (req, res) => {
   if (!requireFields(req.body.data, ['name', 'slug'], res)) return;
@@ -129,7 +154,7 @@ app.get('/companies/:id', (req, res) => {
 
 // --- jobs ---
 app.get('/jobs', (req, res) => {
-  res.json({ data: findBySlugQuery(jobs, req).map(wrap) });
+  res.json({ data: applyFilters(jobs, req, companies).map(wrap) });
 });
 app.post('/jobs', (req, res) => {
   if (!requireFields(req.body.data, ['title', 'slug', 'description'], res)) return;
