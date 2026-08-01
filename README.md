@@ -45,6 +45,21 @@ final judgment always stays with Greeshma/Senti. Jobs using
 `applicationEmail` instead of a URL aren't checked, since there's nothing
 to verify there.
 
+It checks with a plain GET request, not HEAD — HEAD was tried first
+originally (cheaper), but real recruitment platforms handle it
+inconsistently: Zoho Recruit (and white-labeled instances on other
+domains) returns 400 for HEAD but 200 for GET on the identical URL; at
+least one other common ATS returns 404 for HEAD but 200 for GET. GET is
+simply the reliable signal across these platforms, and the bandwidth cost
+of always using it is a non-issue at this scale.
+
+A "Dismiss" button on each flagged result marks it reviewed — it moves to
+a separate "Dismissed" section and won't reappear as needing attention on
+future checks (an "Un-dismiss" undoes this). This persists per-job, not
+per-check-run, so reviewing something once (e.g. a Google Form or ATS
+platform that's actually fine, just flagged due to a slow/blocked
+response) doesn't mean re-triaging the same false positive every time.
+
 ## Requirements
 
 - Node.js 20+

@@ -5,6 +5,7 @@ const progressFill = document.getElementById('progressFill');
 const progressText = document.getElementById('progressText');
 const summary = document.getElementById('summary');
 const brokenList = document.getElementById('brokenList');
+const dismissedList = document.getElementById('dismissedList');
 
 let pollTimer = null;
 
@@ -16,12 +17,34 @@ function formatWhen(iso) {
   return iso ? new Date(iso).toLocaleString() : '';
 }
 
+function renderRow(r, { dismissed }) {
+  const actionBtn = dismissed
+    ? `<button class="copy-btn" data-action="undismiss" data-job-id="${r.job_id}">Un-dismiss</button>`
+    : `<button class="copy-btn" data-action="dismiss" data-job-id="${r.job_id}" data-url="${escapeHtml(r.application_url)}">Dismiss</button>`;
+
+  return `
+    <div class="field-box${dismissed ? '' : ' needs-review'}">
+      <div style="flex:1">
+        <div>${escapeHtml(r.title || `Job #${r.job_id}`)}</div>
+        <div class="hint">
+          ${r.status_code ? `HTTP ${r.status_code}` : escapeHtml(r.error || 'Unreachable')}
+          — <a href="${escapeHtml(r.application_url)}" target="_blank" rel="noopener noreferrer">Open link to test yourself</a>
+          ${dismissed ? `— dismissed ${formatWhen(r.dismissed_at)}` : ''}
+        </div>
+      </div>
+      <a href="${r.adminUrl}" target="_blank" rel="noopener noreferrer">View in Strapi →</a>
+      ${actionBtn}
+    </div>
+  `;
+}
+
 function render(check) {
   if (!check) {
     checkMeta.textContent = 'No check has been run yet.';
     progressBar.style.display = 'none';
     summary.textContent = '';
     brokenList.innerHTML = '';
+    dismissedList.innerHTML = '';
     return;
   }
 
@@ -46,25 +69,21 @@ function render(check) {
     progressText.textContent = `${check.results.length} / ${check.total}`;
   }
 
-  const broken = check.results.filter((r) => !r.ok);
+  const broken = check.results.filter((r) => !r.ok && !r.dismissed_at);
+  const dismissed = check.results.filter((r) => !r.ok && r.dismissed_at);
   const ok = check.results.filter((r) => r.ok);
 
   summary.textContent = check.results.length > 0
-    ? `${check.results.length} of ${check.total} checked so far — ${broken.length} need a look, ${ok.length} responded fine.`
+    ? `${check.results.length} of ${check.total} checked so far — ${broken.length} need a look, ${dismissed.length} dismissed, ${ok.length} responded fine.`
     : 'No results yet.';
 
-  brokenList.innerHTML = broken.map((r) => `
-    <div class="field-box needs-review">
-      <div style="flex:1">
-        <div>${escapeHtml(r.title || `Job #${r.job_id}`)}</div>
-        <div class="hint">
-          ${r.status_code ? `HTTP ${r.status_code}` : escapeHtml(r.error || 'Unreachable')}
-          — <a href="${escapeHtml(r.application_url)}" target="_blank" rel="noopener noreferrer">Open link to test yourself</a>
-        </div>
-      </div>
-      <a href="${r.adminUrl}" target="_blank" rel="noopener noreferrer">View in Strapi →</a>
-    </div>
-  `).join('');
+  brokenList.innerHTML = broken.length > 0
+    ? broken.map((r) => renderRow(r, { dismissed: false })).join('')
+    : '<p class="hint">Nothing needs attention right now.</p>';
+
+  dismissedList.innerHTML = dismissed.length > 0
+    ? dismissed.map((r) => renderRow(r, { dismissed: true })).join('')
+    : '<p class="hint">Nothing dismissed yet.</p>';
 }
 
 async function loadLatest() {
@@ -89,5 +108,25 @@ startBtn.addEventListener('click', async () => {
   }
   loadLatest();
 });
+
+async function handleActionClick(e) {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+
+  const jobId = btn.dataset.jobId;
+  if (btn.dataset.action === 'dismiss') {
+    await fetch(`/api/link-check/${jobId}/dismiss`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ applicationUrl: btn.dataset.url }),
+    });
+  } else if (btn.dataset.action === 'undismiss') {
+    await fetch(`/api/link-check/${jobId}/undismiss`, { method: 'POST' });
+  }
+  loadLatest();
+}
+
+brokenList.addEventListener('click', handleActionClick);
+dismissedList.addEventListener('click', handleActionClick);
 
 loadLatest();

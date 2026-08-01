@@ -1,6 +1,11 @@
 const express = require('express');
 const { runLinkCheck } = require('../lib/linkChecker');
-const { isLinkCheckRunning, getLatestLinkCheck } = require('../lib/db');
+const {
+  isLinkCheckRunning,
+  getLatestLinkCheck,
+  dismissJobLink,
+  undismissJobLink,
+} = require('../lib/db');
 const { adminEditUrl } = require('../lib/strapi');
 
 const router = express.Router();
@@ -20,6 +25,16 @@ router.get('/link-check/latest', (req, res) => {
   if (!check) return res.json(null);
   check.results = check.results.map((r) => ({ ...r, adminUrl: adminEditUrl('job', r.job_id) }));
   res.json(check);
+});
+
+router.post('/link-check/:jobId/dismiss', (req, res) => {
+  dismissJobLink(Number(req.params.jobId), req.body?.applicationUrl);
+  res.json({ ok: true });
+});
+
+router.post('/link-check/:jobId/undismiss', (req, res) => {
+  undismissJobLink(Number(req.params.jobId));
+  res.json({ ok: true });
 });
 
 module.exports = router;

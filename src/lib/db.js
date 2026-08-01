@@ -71,6 +71,14 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS link_dismissals (
+    job_id INTEGER PRIMARY KEY,   -- one dismissal per job, not per check run
+    application_url TEXT,
+    dismissed_at TEXT NOT NULL
+  );
+`);
+
 // CREATE TABLE IF NOT EXISTS won't add columns to a table that already
 // existed from an earlier version of this tool — add any missing ones.
 const NEW_COLUMNS = {
@@ -229,14 +237,35 @@ function addLinkCheckResult(checkId, { jobId, title, slug, applicationUrl, ok, s
   });
 }
 
-/** The most recent check, plus how many results are in so far (for a progress bar while running). */
+function dismissJobLink(jobId, applicationUrl) {
+  db.prepare(`
+    INSERT INTO link_dismissals (job_id, application_url, dismissed_at)
+    VALUES (@jobId, @applicationUrl, @dismissedAt)
+    ON CONFLICT(job_id) DO UPDATE SET application_url = excluded.application_url, dismissed_at = excluded.dismissed_at
+  `).run({ jobId, applicationUrl: applicationUrl || null, dismissedAt: new Date().toISOString() });
+}
+
+function undismissJobLink(jobId) {
+  db.prepare(`DELETE FROM link_dismissals WHERE job_id = ?`).run(jobId);
+}
+
+/**
+ * The most recent check, plus how many results are in so far (for a
+ * progress bar while running). Each result is annotated with whether it's
+ * been dismissed, so the UI can separate "needs attention" from "already
+ * reviewed" without that state resetting on every new check run.
+ */
 function getLatestLinkCheck() {
   const check = db.prepare(`SELECT * FROM link_checks ORDER BY id DESC LIMIT 1`).get();
   if (!check) return null;
   const results = db.prepare(`
     SELECT * FROM link_check_results WHERE check_id = ? ORDER BY ok ASC, id ASC
   `).all(check.id);
-  return { ...check, results };
+  const dismissals = new Map(
+    db.prepare(`SELECT * FROM link_dismissals`).all().map((d) => [d.job_id, d])
+  );
+  const annotated = results.map((r) => ({ ...r, dismissed_at: dismissals.get(r.job_id)?.dismissed_at ?? null }));
+  return { ...check, results: annotated };
 }
 
 module.exports = {
@@ -258,4 +287,6 @@ module.exports = {
   finishLinkCheck,
   addLinkCheckResult,
   getLatestLinkCheck,
+  dismissJobLink,
+  undismissJobLink,
 };

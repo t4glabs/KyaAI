@@ -10,48 +10,53 @@ const {
 const TIMEOUT_MS = 10_000;
 const CONCURRENCY = 5;
 // Identifies itself honestly rather than spoofing a browser — this is a
-// reachability check, not an attempt to evade bot-blocking.
-const USER_AGENT = 'Mozilla/5.0 (compatible; AikyamJobsLinkChecker/1.0; +https://aikyamjobs.org)';
+// reachability check, not an attempt to evade bot-blocking. Accept/
+// Accept-Language are included because at least one real platform
+// (Google Forms) returned different results depending on their presence.
+const REQUEST_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (compatible; AikyamJobsLinkChecker/1.0; +https://aikyamjobs.org)',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+};
 
-async function fetchWithTimeout(url, method) {
+/**
+ * Checks whether a URL responds. GET only — HEAD was tried first originally
+ * (cheaper, no body), but real recruitment platforms turned out to handle
+ * it inconsistently: Zoho Recruit (zohorecruit.com and white-labeled
+ * instances like jobs.civicdatalab.in) returns 400 for HEAD but 200 for
+ * GET on the exact same URL; another common ATS returned 404 for HEAD but
+ * 200 for GET. Neither is a 405/501 "HEAD not allowed" response, so a
+ * narrow HEAD-then-GET-on-405 fallback missed both — GET is simply the
+ * only reliable signal across these platforms, and the bandwidth cost of
+ * always using it is a non-issue at this scale (occasional runs over a
+ * few hundred jobs, not continuous high-volume checking).
+ *
+ * "ok: false" means "couldn't verify" — it doesn't prove the link is
+ * actually dead, since some sites still block automated requests outright
+ * even with GET and real-looking headers.
+ */
+async function checkOneUrl(url) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    return await fetch(url, {
-      method,
+    const response = await fetch(url, {
+      method: 'GET',
       redirect: 'follow',
       signal: controller.signal,
-      headers: { 'User-Agent': USER_AGENT },
+      headers: REQUEST_HEADERS,
     });
+    // Body isn't needed — drop it without reading, so the connection can
+    // be released promptly instead of held open by an unread stream.
+    response.body?.cancel().catch(() => {});
+    if (response.status < 400) {
+      return { ok: true, statusCode: response.status };
+    }
+    return { ok: false, statusCode: response.status };
+  } catch (err) {
+    return { ok: false, error: err.name === 'AbortError' ? 'Timed out' : err.message };
   } finally {
     clearTimeout(timer);
   }
-}
-
-/**
- * Checks whether a URL responds. HEAD first (cheaper); some servers reject
- * HEAD specifically (405/501) or block it outright, so falls back to GET
- * before concluding anything. "ok: false" means "couldn't verify" — it
- * doesn't prove the link is actually dead, since some sites block automated
- * requests entirely even when the page works fine in a real browser.
- */
-async function checkOneUrl(url) {
-  for (const method of ['HEAD', 'GET']) {
-    try {
-      const response = await fetchWithTimeout(url, method);
-      if (response.status < 400) {
-        return { ok: true, statusCode: response.status };
-      }
-      if (method === 'HEAD' && (response.status === 405 || response.status === 501)) {
-        continue; // this server just doesn't support HEAD — try GET before giving up
-      }
-      return { ok: false, statusCode: response.status };
-    } catch (err) {
-      if (method === 'HEAD') continue;
-      return { ok: false, error: err.name === 'AbortError' ? 'Timed out' : err.message };
-    }
-  }
-  return { ok: false, error: 'Unreachable' };
 }
 
 /** Runs in the background — the route that triggers this responds immediately. */
