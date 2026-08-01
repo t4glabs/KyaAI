@@ -192,6 +192,30 @@ If you'd rather skip this for now and add it later, that's fine too — steps
 1-5 alone give you a working, reachable tool; this step is what keeps it
 from being open to the entire internet.
 
+## Deploying an update
+
+`git pull` alone is **not enough** — static files (`public/*.html`, `*.js`,
+`*.css`) are read fresh from disk on every request, so those update
+immediately, but Express only registers server-side routes once at startup.
+If a new feature added a new API route and you only `git pull` without
+restarting, the page will load fine but any new endpoint will 404 with
+`Cannot POST/GET ...` — that's the exact symptom, and it means the running
+process is still the old one. Every update needs both steps:
+
+```bash
+cd ~/KyaAI
+git pull
+launchctl unload ~/Library/LaunchAgents/space.aikyam.job-composer.plist
+launchctl load ~/Library/LaunchAgents/space.aikyam.job-composer.plist
+```
+
+(Quicker equivalent for the restart, since this is a `KeepAlive: true`
+agent — killing it makes launchd relaunch it automatically:
+`pkill -f "node.*KyaAI/src/server.js"`)
+
+Verify the same way as initial setup: `tail -20 ~/KyaAI/logs/out.log` should
+show a fresh startup line.
+
 ## What NOT to do on this machine
 
 - Don't run `npm run poll` manually as a "test," don't run
