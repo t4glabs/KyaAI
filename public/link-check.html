@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aikyam Jobs — Link Check</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Application Link Check</h1>
+    <p class="subtitle">
+      Checks whether each published job's application link still responds —
+      orgs sometimes remove or unpublish their own postings without telling us.
+      <a href="index.html">Composer</a> · <a href="sources.html">Sources</a> · <a href="insights.html">Insights</a>
+    </p>
+  </header>
+
+  <main>
+    <section class="results-panel">
+      <div class="sources-header">
+        <h2>Run a check</h2>
+        <button id="startBtn">Check application links</button>
+      </div>
+      <p class="hint">
+        This only checks whether the URL responds (like a browser loading
+        the page) — it never reads or extracts the job posting's content.
+        A flagged link means <strong>worth a human look</strong>, not
+        "definitely dead" — some sites block automated checks even when the
+        page works fine.
+      </p>
+      <p id="checkMeta" class="hint"></p>
+      <div id="progressBar" class="field-bar-row" style="display:none">
+        <div class="field-bar-label">Progress</div>
+        <div class="field-bar-track"><div id="progressFill" class="field-bar-fill" style="width:0%"></div></div>
+        <div id="progressText" class="field-bar-pct"></div>
+      </div>
+    </section>
+
+    <section class="results-panel">
+      <h2>Results</h2>
+      <p id="summary" class="hint"></p>
+      <div id="brokenList"></div>
+    </section>
+  </main>
+
+  <script src="link-check.js"></script>
+</body>
+</html>

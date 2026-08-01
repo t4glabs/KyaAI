@@ -33,6 +33,18 @@ tool that searches our own Strapi data (never the source sites) for
 never fetches or scrapes content from any third-party site — it only
 stores links you add yourself, and only searches data we already own.
 
+Also a Link Check tab (`link-check.html`) — checks whether every published
+job's `applicationUrl` still responds, since orgs sometimes remove or
+unpublish their own postings without telling us. This only checks that the
+URL loads (like a browser would) — it never reads the job posting's
+content, so it's not scraping. Runs as a background job (since checking
+hundreds of external URLs can take a while) with a live progress bar; flags
+non-2xx/timeout results as "worth a human look," not "definitely dead,"
+since some sites block automated requests even when the page works fine —
+final judgment always stays with Greeshma/Senti. Jobs using
+`applicationEmail` instead of a URL aren't checked, since there's nothing
+to verify there.
+
 ## Requirements
 
 - Node.js 20+

@@ -123,6 +123,44 @@ async function searchCompanies(name) {
 }
 
 /**
+ * Every published job with a non-empty applicationUrl — paginated, since
+ * there could be hundreds. Filters client-side rather than via a Strapi
+ * $notNull query, since some older jobs may have an empty string rather
+ * than a true null, which $notNull wouldn't catch.
+ */
+async function getAllPublishedJobsWithApplicationUrl() {
+  const results = [];
+  let page = 1;
+  const pageSize = 100;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const params = new URLSearchParams();
+    params.set('filters[publishedAt][$notNull]', 'true');
+    params.set('fields', 'title,applicationUrl,slug');
+    params.set('pagination[page]', String(page));
+    params.set('pagination[pageSize]', String(pageSize));
+
+    const data = await strapiGet(`/jobs?${params.toString()}`);
+    const items = (data.data || [])
+      .map((entry) => ({
+        id: entry.id,
+        title: entry.attributes.title,
+        applicationUrl: entry.attributes.applicationUrl,
+        slug: entry.attributes.slug,
+      }))
+      .filter((job) => job.applicationUrl && job.applicationUrl.trim());
+    results.push(...items);
+
+    const pageCount = data.meta?.pagination?.pageCount ?? 1;
+    if (page >= pageCount) break;
+    page += 1;
+  }
+
+  return results;
+}
+
+/**
  * Looks up a category by name; creates it (name + slug only, no description —
  * matches the existing create-missing-categories.js convention) if missing.
  * Categories are low-stakes shared taxonomy, so auto-create on push is fine.
@@ -355,4 +393,5 @@ module.exports = {
   getEntrySnapshot,
   searchJobs,
   searchCompanies,
+  getAllPublishedJobsWithApplicationUrl,
 };

@@ -45,6 +45,31 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS link_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    total INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'running'  -- 'running' | 'done'
+  );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS link_check_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    check_id INTEGER NOT NULL,
+    job_id INTEGER NOT NULL,
+    title TEXT,
+    slug TEXT,
+    application_url TEXT NOT NULL,
+    ok INTEGER NOT NULL,          -- 0/1 — 0 means "couldn't verify," not "definitely dead"
+    status_code INTEGER,
+    error TEXT,
+    checked_at TEXT NOT NULL
+  );
+`);
+
 // CREATE TABLE IF NOT EXISTS won't add columns to a table that already
 // existed from an earlier version of this tool — add any missing ones.
 const NEW_COLUMNS = {
@@ -159,6 +184,50 @@ function resetAllSourceChecks() {
   db.prepare('UPDATE sources SET checked_at = NULL').run();
 }
 
+function isLinkCheckRunning() {
+  const check = db.prepare(`SELECT status FROM link_checks ORDER BY id DESC LIMIT 1`).get();
+  return Boolean(check && check.status === 'running');
+}
+
+function startLinkCheck(total) {
+  const info = db.prepare(`
+    INSERT INTO link_checks (started_at, total, status) VALUES (?, ?, 'running')
+  `).run(new Date().toISOString(), total);
+  return info.lastInsertRowid;
+}
+
+function finishLinkCheck(checkId) {
+  db.prepare(`UPDATE link_checks SET finished_at = ?, status = 'done' WHERE id = ?`)
+    .run(new Date().toISOString(), checkId);
+}
+
+function addLinkCheckResult(checkId, { jobId, title, slug, applicationUrl, ok, statusCode, error }) {
+  db.prepare(`
+    INSERT INTO link_check_results (check_id, job_id, title, slug, application_url, ok, status_code, error, checked_at)
+    VALUES (@checkId, @jobId, @title, @slug, @applicationUrl, @ok, @statusCode, @error, @checkedAt)
+  `).run({
+    checkId,
+    jobId,
+    title: title || null,
+    slug: slug || null,
+    applicationUrl,
+    ok: ok ? 1 : 0,
+    statusCode: statusCode ?? null,
+    error: error ?? null,
+    checkedAt: new Date().toISOString(),
+  });
+}
+
+/** The most recent check, plus how many results are in so far (for a progress bar while running). */
+function getLatestLinkCheck() {
+  const check = db.prepare(`SELECT * FROM link_checks ORDER BY id DESC LIMIT 1`).get();
+  if (!check) return null;
+  const results = db.prepare(`
+    SELECT * FROM link_check_results WHERE check_id = ? ORDER BY ok ASC, id ASC
+  `).all(check.id);
+  return { ...check, results };
+}
+
 module.exports = {
   db,
   insertRun,
@@ -172,4 +241,9 @@ module.exports = {
   deleteSource,
   setSourceChecked,
   resetAllSourceChecks,
+  isLinkCheckRunning,
+  startLinkCheck,
+  finishLinkCheck,
+  addLinkCheckResult,
+  getLatestLinkCheck,
 };
