@@ -1,5 +1,3 @@
-I read the current prompt file, `job-prompt.v2.md` (which sets the house format for this kind of revision), and `promptLoader.js` — the revised file below is a drop-in replacement for `prompts/company-prompt.v1.md`, with the `<!-- PROMPT_START -->` / `<!-- PROMPT_END -->` markers the loader needs.
-
 ## Pattern Analysis
 
 **Caveat first: this is two examples, one operator.** Any pattern that shows up once is a hint, not a finding. I've marked which is which. The two pairs are also very different organisations (a think tank and a CSR agency), which helps — a pattern that repeats across both is more credible than the raw count suggests.
