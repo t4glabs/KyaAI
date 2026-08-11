@@ -25,7 +25,9 @@ async function strapiRequest(method, endpoint, body) {
 
   if (!response.ok) {
     const responseBody = await response.text();
-    throw new Error(`Strapi ${method} ${endpoint} failed: ${response.status} ${responseBody.slice(0, 500)}`);
+    const error = new Error(`Strapi ${method} ${endpoint} failed: ${response.status} ${responseBody.slice(0, 500)}`);
+    error.status = response.status;
+    throw error;
   }
 
   return response.json();

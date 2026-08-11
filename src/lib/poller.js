@@ -15,6 +15,7 @@ const { getEntrySnapshot } = require('./strapi');
 async function pollPublishedEntries() {
   const pushed = listPushedRuns();
   let updated = 0;
+  let gone = 0;
   let errors = 0;
 
   for (const run of pushed) {
@@ -25,15 +26,24 @@ async function pollPublishedEntries() {
         updated += 1;
       }
     } catch (err) {
-      errors += 1;
-      console.error(`[poller] run ${run.id} (${run.strapi_content_type} #${run.strapi_entry_id}): ${err.message}`);
+      // A 404 means the entry was deleted from Strapi after being pushed —
+      // an expected real-world state (someone removed the posting), not a
+      // failure of this tool. Logging it as an "error" every poll forever
+      // is just noise; genuine failures (network issues, 5xx) still count.
+      if (err.status === 404) {
+        gone += 1;
+        console.log(`[poller] run ${run.id} (${run.strapi_content_type} #${run.strapi_entry_id}): no longer exists in Strapi (deleted)`);
+      } else {
+        errors += 1;
+        console.error(`[poller] run ${run.id} (${run.strapi_content_type} #${run.strapi_entry_id}): ${err.message}`);
+      }
     }
   }
 
   if (pushed.length > 0) {
-    console.log(`[poller] checked ${pushed.length} pushed run(s): ${updated} currently live (final snapshot refreshed), ${errors} error(s)`);
+    console.log(`[poller] checked ${pushed.length} pushed run(s): ${updated} currently live (final snapshot refreshed), ${gone} gone (deleted in Strapi), ${errors} error(s)`);
   }
-  return { checked: pushed.length, updated, errors };
+  return { checked: pushed.length, updated, gone, errors };
 }
 
 module.exports = { pollPublishedEntries };
