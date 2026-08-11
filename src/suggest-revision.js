@@ -82,7 +82,11 @@ anything the evidence doesn't implicate unchanged. End with a "## Changelog
 vs. ${currentVersion}" section listing exactly what changed and why, citing
 the specific patterns from your analysis above.`;
 
-  const rawOutput = await runClaude(analysisPrompt);
+  // This is an occasional/manual batch job, not a request a user is blocked
+  // on — analyzing ~30 examples and drafting a full replacement prompt file
+  // in one shot is heavier than the interactive compose path, so give it
+  // much more room than the default 120s before giving up.
+  const rawOutput = await runClaude(analysisPrompt, 10 * 60_000);
 
   const versionMatch = currentVersion.match(/v(\d+)$/);
   const nextVersionNumber = versionMatch ? Number(versionMatch[1]) + 1 : 2;

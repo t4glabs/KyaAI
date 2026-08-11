@@ -7,7 +7,7 @@ const TIMEOUT_MS = 120_000;
  * Runs `claude -p` non-interactively with the given prompt piped in via stdin,
  * and returns the raw stdout text. Uses the subscription CLI, not the metered API.
  */
-function runClaude(fullPrompt) {
+function runClaude(fullPrompt, timeoutMs = TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const child = spawn(CLAUDE_BIN, ['-p', '--output-format', 'text'], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -17,8 +17,8 @@ function runClaude(fullPrompt) {
     let stderr = '';
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
-      reject(new Error(`claude -p timed out after ${TIMEOUT_MS}ms`));
-    }, TIMEOUT_MS);
+      reject(new Error(`claude -p timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
 
     child.stdout.on('data', (chunk) => {
       stdout += chunk.toString('utf8');
