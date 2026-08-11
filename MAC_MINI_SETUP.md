@@ -28,11 +28,15 @@ unrelated and untouched by this setup.)
 ## 1. Clone
 
 ```bash
-cd ~
+cd ~/Desktop
 git clone https://github.com/t4glabs/KyaAI.git
 cd KyaAI
 npm install
 ```
+
+On the current Mac Mini this is cloned to `~/Desktop/KyaAI`, not `~/KyaAI`
+— every path below assumes wherever you actually cloned it, so adjust if
+you put it somewhere else.
 
 ## 2. Configure the real environment
 
@@ -90,7 +94,7 @@ Create the logs folder and the launchd plist (replace `<username>`,
 `<node-path>`, and the clone path below with the real values):
 
 ```bash
-mkdir -p ~/KyaAI/logs
+mkdir -p ~/Desktop/KyaAI/logs
 mkdir -p ~/Library/LaunchAgents
 ```
 
@@ -106,18 +110,18 @@ mkdir -p ~/Library/LaunchAgents
   <key>ProgramArguments</key>
   <array>
     <string><node-path></string>
-    <string>/Users/<username>/KyaAI/src/server.js</string>
+    <string>/Users/<username>/Desktop/KyaAI/src/server.js</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/<username>/KyaAI</string>
+  <string>/Users/<username>/Desktop/KyaAI</string>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>/Users/<username>/KyaAI/logs/out.log</string>
+  <string>/Users/<username>/Desktop/KyaAI/logs/out.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/<username>/KyaAI/logs/err.log</string>
+  <string>/Users/<username>/Desktop/KyaAI/logs/err.log</string>
 </dict>
 </plist>
 ```
@@ -133,7 +137,7 @@ Verify:
 ```bash
 launchctl list | grep job-composer
 curl -s http://localhost:4100 -o /dev/null -w "HTTP %{http_code}\n"
-tail -20 ~/KyaAI/logs/out.log
+tail -20 ~/Desktop/KyaAI/logs/out.log
 ```
 
 The log should show the startup line and should **not** show the
@@ -203,7 +207,7 @@ restarting, the page will load fine but any new endpoint will 404 with
 process is still the old one. Every update needs both steps:
 
 ```bash
-cd ~/KyaAI
+cd ~/Desktop/KyaAI
 git pull
 launchctl unload ~/Library/LaunchAgents/space.aikyam.job-composer.plist
 launchctl load ~/Library/LaunchAgents/space.aikyam.job-composer.plist
@@ -213,8 +217,8 @@ launchctl load ~/Library/LaunchAgents/space.aikyam.job-composer.plist
 agent — killing it makes launchd relaunch it automatically:
 `pkill -f "node.*KyaAI/src/server.js"`)
 
-Verify the same way as initial setup: `tail -20 ~/KyaAI/logs/out.log` should
-show a fresh startup line.
+Verify the same way as initial setup: `tail -20 ~/Desktop/KyaAI/logs/out.log`
+should show a fresh startup line.
 
 ## What NOT to do on this machine
 
