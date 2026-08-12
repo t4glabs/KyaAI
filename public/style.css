@@ -113,6 +113,19 @@ button:disabled { opacity: 0.6; cursor: default; }
 .field-box:last-child { border-bottom: none; }
 .field-box.needs-review { background: var(--accent-bg); border-radius: 6px; padding: 0.6rem; }
 
+.note-input {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  background: var(--bg);
+  color: var(--fg);
+}
+
 .field-box label {
   flex: 0 0 190px;
   font-size: 0.85rem;

@@ -74,8 +74,9 @@ db.exec(`
 db.exec(`
   CREATE TABLE IF NOT EXISTS link_dismissals (
     job_id INTEGER PRIMARY KEY,   -- one dismissal per job, not per check run
-    application_url TEXT,
-    dismissed_at TEXT NOT NULL
+    application_url TEXT,         -- the exact link that was dismissed — see getLatestLinkCheck
+    dismissed_at TEXT NOT NULL,
+    note TEXT                     -- freeform, e.g. "known bit.ly false positive, verified working"
   );
 `);
 
@@ -97,6 +98,11 @@ for (const [column, sqlType] of Object.entries(NEW_COLUMNS)) {
 const existingLinkCheckColumns = new Set(db.prepare('PRAGMA table_info(link_checks)').all().map((c) => c.name));
 if (!existingLinkCheckColumns.has('error')) {
   db.exec(`ALTER TABLE link_checks ADD COLUMN error TEXT`);
+}
+
+const existingDismissalColumns = new Set(db.prepare('PRAGMA table_info(link_dismissals)').all().map((c) => c.name));
+if (!existingDismissalColumns.has('note')) {
+  db.exec(`ALTER TABLE link_dismissals ADD COLUMN note TEXT`);
 }
 
 function insertRun({ type, promptVersion, sourceText, metadata, description }) {
@@ -237,12 +243,12 @@ function addLinkCheckResult(checkId, { jobId, title, slug, applicationUrl, ok, s
   });
 }
 
-function dismissJobLink(jobId, applicationUrl) {
+function dismissJobLink(jobId, applicationUrl, note) {
   db.prepare(`
-    INSERT INTO link_dismissals (job_id, application_url, dismissed_at)
-    VALUES (@jobId, @applicationUrl, @dismissedAt)
-    ON CONFLICT(job_id) DO UPDATE SET application_url = excluded.application_url, dismissed_at = excluded.dismissed_at
-  `).run({ jobId, applicationUrl: applicationUrl || null, dismissedAt: new Date().toISOString() });
+    INSERT INTO link_dismissals (job_id, application_url, dismissed_at, note)
+    VALUES (@jobId, @applicationUrl, @dismissedAt, @note)
+    ON CONFLICT(job_id) DO UPDATE SET application_url = excluded.application_url, dismissed_at = excluded.dismissed_at, note = excluded.note
+  `).run({ jobId, applicationUrl: applicationUrl || null, dismissedAt: new Date().toISOString(), note: note || null });
 }
 
 function undismissJobLink(jobId) {
@@ -253,7 +259,11 @@ function undismissJobLink(jobId) {
  * The most recent check, plus how many results are in so far (for a
  * progress bar while running). Each result is annotated with whether it's
  * been dismissed, so the UI can separate "needs attention" from "already
- * reviewed" without that state resetting on every new check run.
+ * reviewed" without that state resetting on every new check run. A
+ * dismissal only counts if the job's application_url hasn't changed since
+ * it was dismissed — if an operator later edits the job to a new link,
+ * that's an unreviewed link and should surface again, not stay silently
+ * suppressed under the old link's dismissal.
  */
 function getLatestLinkCheck() {
   const check = db.prepare(`SELECT * FROM link_checks ORDER BY id DESC LIMIT 1`).get();
@@ -264,7 +274,15 @@ function getLatestLinkCheck() {
   const dismissals = new Map(
     db.prepare(`SELECT * FROM link_dismissals`).all().map((d) => [d.job_id, d])
   );
-  const annotated = results.map((r) => ({ ...r, dismissed_at: dismissals.get(r.job_id)?.dismissed_at ?? null }));
+  const annotated = results.map((r) => {
+    const dismissal = dismissals.get(r.job_id);
+    const stillApplies = dismissal && (!dismissal.application_url || dismissal.application_url === r.application_url);
+    return {
+      ...r,
+      dismissed_at: stillApplies ? dismissal.dismissed_at : null,
+      note: stillApplies ? dismissal.note : null,
+    };
+  });
   return { ...check, results: annotated };
 }
 

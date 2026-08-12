@@ -7,6 +7,7 @@ const {
   undismissJobLink,
 } = require('../lib/db');
 const { adminEditUrl } = require('../lib/strapi');
+const { classifyLink } = require('../lib/linkClassifier');
 
 const router = express.Router();
 
@@ -23,12 +24,16 @@ router.post('/link-check/start', (req, res) => {
 router.get('/link-check/latest', (req, res) => {
   const check = getLatestLinkCheck();
   if (!check) return res.json(null);
-  check.results = check.results.map((r) => ({ ...r, adminUrl: adminEditUrl('job', r.job_id) }));
+  check.results = check.results.map((r) => ({
+    ...r,
+    adminUrl: adminEditUrl('job', r.job_id),
+    linkType: classifyLink(r.application_url),
+  }));
   res.json(check);
 });
 
 router.post('/link-check/:jobId/dismiss', (req, res) => {
-  dismissJobLink(Number(req.params.jobId), req.body?.applicationUrl);
+  dismissJobLink(Number(req.params.jobId), req.body?.applicationUrl, req.body?.note);
   res.json({ ok: true });
 });
 

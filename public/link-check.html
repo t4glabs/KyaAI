@@ -26,8 +26,10 @@
         This only checks whether the URL responds (like a browser loading
         the page) — it never reads or extracts the job posting's content.
         A flagged link means <strong>worth a human look</strong>, not
-        "definitely dead" — some sites block automated checks even when the
-        page works fine.
+        "definitely dead" — some sites (bit.ly, Google Forms, and others)
+        block automated checks even when the page works fine. The tag next
+        to each title shows what kind of link it is, so you can spot known
+        false-positive patterns without opening it.
       </p>
       <p id="checkMeta" class="hint"></p>
       <div id="progressBar" class="field-bar-row" style="display:none">
@@ -44,7 +46,7 @@
     </section>
 
     <section class="results-panel">
-      <h2>Dismissed <span class="hint">(already reviewed — won't show above on future checks until un-dismissed)</span></h2>
+      <h2>Dismissed <span class="hint">(already reviewed — stays dismissed on every future check until un-dismissed, unless the job's link is later changed to a new one)</span></h2>
       <div id="dismissedList"></div>
     </section>
   </main>

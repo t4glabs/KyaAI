@@ -18,21 +18,29 @@ function formatWhen(iso) {
 }
 
 function renderRow(r, { dismissed }) {
+  const typeTag = r.linkType ? `<span class="badge-pill" title="${escapeHtml(r.linkType.host)}">${escapeHtml(r.linkType.label)}</span>` : '';
+  const url = escapeHtml(r.application_url);
+
   const actionBtn = dismissed
     ? `<button class="copy-btn" data-action="undismiss" data-job-id="${r.job_id}">Un-dismiss</button>`
-    : `<button class="copy-btn" data-action="dismiss" data-job-id="${r.job_id}" data-url="${escapeHtml(r.application_url)}">Dismiss</button>`;
+    : `<button class="copy-btn" data-action="dismiss" data-job-id="${r.job_id}" data-url="${url}">Dismiss</button>`;
+  const noteBtn = dismissed
+    ? `<button class="copy-btn" data-action="save-note" data-job-id="${r.job_id}" data-url="${url}">Save note</button>`
+    : '';
 
   return `
     <div class="field-box${dismissed ? '' : ' needs-review'}">
       <div style="flex:1">
-        <div>${escapeHtml(r.title || `Job #${r.job_id}`)}</div>
+        <div>${escapeHtml(r.title || `Job #${r.job_id}`)} ${typeTag}</div>
         <div class="hint">
           ${r.status_code ? `HTTP ${r.status_code}` : escapeHtml(r.error || 'Unreachable')}
-          — <a href="${escapeHtml(r.application_url)}" target="_blank" rel="noopener noreferrer">Open link to test yourself</a>
+          — <a href="${url}" target="_blank" rel="noopener noreferrer">Open link to test yourself</a>
           ${dismissed ? `— dismissed ${formatWhen(r.dismissed_at)}` : ''}
         </div>
+        <input type="text" class="note-input" placeholder="Note for future reference (optional)" value="${escapeHtml(r.note || '')}">
       </div>
       <a href="${r.adminUrl}" target="_blank" rel="noopener noreferrer">View in Strapi →</a>
+      ${noteBtn}
       ${actionBtn}
     </div>
   `;
@@ -114,13 +122,16 @@ async function handleActionClick(e) {
   if (!btn) return;
 
   const jobId = btn.dataset.jobId;
-  if (btn.dataset.action === 'dismiss') {
+  const action = btn.dataset.action;
+
+  if (action === 'dismiss' || action === 'save-note') {
+    const noteInput = btn.closest('.field-box')?.querySelector('.note-input');
     await fetch(`/api/link-check/${jobId}/dismiss`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ applicationUrl: btn.dataset.url }),
+      body: JSON.stringify({ applicationUrl: btn.dataset.url, note: noteInput?.value.trim() || null }),
     });
-  } else if (btn.dataset.action === 'undismiss') {
+  } else if (action === 'undismiss') {
     await fetch(`/api/link-check/${jobId}/undismiss`, { method: 'POST' });
   }
   loadLatest();
