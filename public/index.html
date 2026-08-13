@@ -42,6 +42,34 @@
         <span id="pushStatus"></span>
       </div>
     </section>
+
+    <section id="companyPanel" class="results-panel" hidden>
+      <h2>Generate a company profile for <span id="companyPanelName"></span></h2>
+      <p class="hint">
+        This runs independently of the job above — the job's draft stays exactly as
+        it is and won't be pushed by anything you do here. Paste the org's website
+        text, About page, or LinkedIn content below (or a bare URL), same as the
+        main box.
+      </p>
+      <textarea id="companySourceInput" rows="8" placeholder="Paste company info or a URL..."></textarea>
+      <button id="companyFormatBtn">Format company profile</button>
+      <span id="companyFormatStatus"></span>
+
+      <div id="companyResultWrap" hidden>
+        <div id="companyFieldsContainer"></div>
+
+        <h3>Description</h3>
+        <div class="field-box">
+          <textarea id="companyDescriptionBox" rows="16"></textarea>
+          <button class="copy-btn" data-copy-target="companyDescriptionBox">Copy</button>
+        </div>
+
+        <div class="push-panel">
+          <button id="companyPushBtn">Push Company to Strapi as Draft</button>
+          <span id="companyPushStatus"></span>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script src="app.js"></script>

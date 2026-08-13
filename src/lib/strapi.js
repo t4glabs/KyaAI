@@ -125,38 +125,24 @@ async function searchCompanies(name) {
 }
 
 /**
- * Every published job with a non-empty applicationUrl — paginated, since
- * there could be hundreds. Filters client-side rather than via a Strapi
- * $notNull query, since some older jobs may have an empty string rather
- * than a true null, which $notNull wouldn't catch.
+ * Fetches every page of a Strapi collection, mapping each raw entry through
+ * `mapEntry`. `extraParams` is cloned per page rather than mutated, so
+ * callers can pass one URLSearchParams in without it accumulating repeated
+ * pagination keys across iterations.
  */
-async function getAllPublishedJobsWithApplicationUrl() {
+async function fetchAllPages(endpoint, extraParams, mapEntry) {
   const results = [];
   let page = 1;
   const pageSize = 100;
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const params = new URLSearchParams();
-    params.set('filters[publishedAt][$notNull]', 'true');
-    // Strapi's `fields` param needs array bracket notation — a comma-joined
-    // string (fields=a,b,c) is rejected outright with a 400 ValidationError.
-    params.set('fields[0]', 'title');
-    params.set('fields[1]', 'applicationUrl');
-    params.set('fields[2]', 'slug');
+    const params = new URLSearchParams(extraParams);
     params.set('pagination[page]', String(page));
     params.set('pagination[pageSize]', String(pageSize));
 
-    const data = await strapiGet(`/jobs?${params.toString()}`);
-    const items = (data.data || [])
-      .map((entry) => ({
-        id: entry.id,
-        title: entry.attributes.title,
-        applicationUrl: entry.attributes.applicationUrl,
-        slug: entry.attributes.slug,
-      }))
-      .filter((job) => job.applicationUrl && job.applicationUrl.trim());
-    results.push(...items);
+    const data = await strapiGet(`/${endpoint}?${params.toString()}`);
+    results.push(...(data.data || []).map(mapEntry));
 
     const pageCount = data.meta?.pagination?.pageCount ?? 1;
     if (page >= pageCount) break;
@@ -164,6 +150,94 @@ async function getAllPublishedJobsWithApplicationUrl() {
   }
 
   return results;
+}
+
+/**
+ * Every published job with a non-empty applicationUrl — paginated, since
+ * there could be hundreds. Filters client-side rather than via a Strapi
+ * $notNull query, since some older jobs may have an empty string rather
+ * than a true null, which $notNull wouldn't catch.
+ */
+async function getAllPublishedJobsWithApplicationUrl() {
+  const params = new URLSearchParams();
+  params.set('filters[publishedAt][$notNull]', 'true');
+  // Strapi's `fields` param needs array bracket notation — a comma-joined
+  // string (fields=a,b,c) is rejected outright with a 400 ValidationError.
+  params.set('fields[0]', 'title');
+  params.set('fields[1]', 'applicationUrl');
+  params.set('fields[2]', 'slug');
+
+  const all = await fetchAllPages('jobs', params, (entry) => ({
+    id: entry.id,
+    title: entry.attributes.title,
+    applicationUrl: entry.attributes.applicationUrl,
+    slug: entry.attributes.slug,
+  }));
+  return all.filter((job) => job.applicationUrl && job.applicationUrl.trim());
+}
+
+const COMPANY_NAME_NOISE_WORDS = new Set([
+  'the', 'ltd', 'limited', 'pvt', 'private', 'llp', 'inc', 'incorporated', 'co',
+]);
+
+/** Lowercases, drops punctuation, and strips generic corporate suffixes/prefixes
+ * ("The", "Ltd", "Pvt", ...) so "The Clinton Health Access Initiative (CHAI)"
+ * and "CHAI" share enough tokens to be compared meaningfully. Deliberately
+ * does NOT strip words like "Foundation" or "Trust" — for an NGO those are
+ * often the most distinctive part of the name, not noise. */
+function normalizeCompanyName(name) {
+  return (name || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word && !COMPANY_NAME_NOISE_WORDS.has(word))
+    .join(' ')
+    .trim();
+}
+
+/** Word-overlap (Jaccard) similarity between two already-normalized names,
+ * with a bonus when one is a substring of the other — catches the common
+ * "CRY" vs "Child Rights and You - CRY" case, where overlap alone is weak
+ * (CRY is one word out of many) but containment is a strong signal. */
+function companyNameSimilarity(a, b) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const aWords = new Set(a.split(' '));
+  const bWords = new Set(b.split(' '));
+  const intersection = [...aWords].filter((w) => bWords.has(w)).length;
+  const union = new Set([...aWords, ...bWords]).size;
+  const jaccard = union > 0 ? intersection / union : 0;
+  const substringBonus = a.includes(b) || b.includes(a) ? 0.3 : 0;
+  return Math.min(1, jaccard + substringBonus);
+}
+
+/**
+ * Fuzzy match against every company in Strapi (189 companies at the time
+ * this was written — small enough to fetch in full and compare in memory,
+ * which is far more reliable than Strapi's $containsi for names that differ
+ * by a "The"/"Ltd"/abbreviation). Used only as a fallback when the
+ * exact-match lookup (checkCompany) fails, to surface likely existing
+ * matches instead of prompting to create a duplicate company profile.
+ */
+async function findSimilarCompanies(name, { limit = 5, minScore = 0.3 } = {}) {
+  const target = normalizeCompanyName(name);
+  if (!target) return [];
+
+  const params = new URLSearchParams();
+  params.set('fields[0]', 'name');
+  params.set('fields[1]', 'slug');
+  const all = await fetchAllPages('companies', params, (entry) => ({
+    id: entry.id,
+    name: entry.attributes.name,
+    slug: entry.attributes.slug,
+  }));
+
+  return all
+    .map((c) => ({ ...c, score: companyNameSimilarity(target, normalizeCompanyName(c.name)) }))
+    .filter((c) => c.score >= minScore)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
 }
 
 /**
@@ -400,4 +474,5 @@ module.exports = {
   searchJobs,
   searchCompanies,
   getAllPublishedJobsWithApplicationUrl,
+  findSimilarCompanies,
 };

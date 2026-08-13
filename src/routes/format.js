@@ -2,7 +2,7 @@ const express = require('express');
 const { loadSystemPrompt, PROMPT_FILES } = require('../lib/promptLoader');
 const { formatWithClaude } = require('../lib/claude');
 const { resolveSourceText } = require('../lib/fetchSource');
-const { checkCategories, checkCompany } = require('../lib/strapi');
+const { checkCategories, checkCompany, findSimilarCompanies } = require('../lib/strapi');
 const { insertRun, getRun, listRuns } = require('../lib/db');
 
 const router = express.Router();
@@ -32,6 +32,13 @@ router.post('/format', async (req, res) => {
         }
         if (metadata.companyName) {
           companyCheck = await checkCompany(metadata.companyName);
+          // Exact match failed — the name is very likely just formatted
+          // differently ("CRY" vs "Child Rights and You - CRY", a missing
+          // "The"/"Ltd", etc.), not actually new. Suggest close existing
+          // matches instead of prompting straight to "create a new company."
+          if (!companyCheck.exists) {
+            companyCheck.suggestions = await findSimilarCompanies(metadata.companyName);
+          }
         }
       }
     } catch (lookupErr) {
