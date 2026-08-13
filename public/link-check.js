@@ -33,7 +33,7 @@ function renderRow(r, { dismissed }) {
       <div style="flex:1">
         <div>${escapeHtml(r.title || `Job #${r.job_id}`)} ${typeTag}</div>
         <div class="hint">
-          ${r.status_code ? `HTTP ${r.status_code}` : escapeHtml(r.error || 'Unreachable')}
+          ${r.error ? escapeHtml(r.error) : (r.status_code ? `HTTP ${r.status_code}` : 'Unreachable')}
           — <a href="${url}" target="_blank" rel="noopener noreferrer">Open link to test yourself</a>
           ${dismissed ? `— dismissed ${formatWhen(r.dismissed_at)}` : ''}
         </div>

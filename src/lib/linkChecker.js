@@ -13,11 +13,25 @@ const CONCURRENCY = 5;
 // reachability check, not an attempt to evade bot-blocking. Accept/
 // Accept-Language are included because at least one real platform
 // (Google Forms) returned different results depending on their presence.
+// sec-fetch-dest/sec-fetch-mode matter specifically for Google Forms: without
+// them Google returns a blunt 401 that looks identical whether the form is
+// actually gone or just requires sign-in; with them present Google instead
+// redirects sign-in-gated forms to accounts.google.com, which lets
+// checkOneUrl tell the two cases apart (see below).
 const REQUEST_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (compatible; AikyamJobsLinkChecker/1.0; +https://aikyamjobs.org)',
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.9',
+  'sec-fetch-dest': 'document',
+  'sec-fetch-mode': 'navigate',
 };
+
+const GOOGLE_SIGNIN_REQUIRED_MESSAGE =
+  'Redirects to Google sign-in — this form requires a Google account to view, ' +
+  'for every visitor, not just this checker (often caused by the form\'s ' +
+  '"Limit to 1 response" setting). Real applicants without a Google account ' +
+  'may be blocked too — worth confirming with the organization rather than ' +
+  'treating this as a dead link.';
 
 /**
  * Checks whether a URL responds. GET only — HEAD was tried first originally
@@ -48,6 +62,17 @@ async function checkOneUrl(url) {
     // Body isn't needed — drop it without reading, so the connection can
     // be released promptly instead of held open by an unread stream.
     response.body?.cancel().catch(() => {});
+
+    let finalHost = null;
+    try {
+      finalHost = new URL(response.url).hostname;
+    } catch {
+      // response.url should always be a valid absolute URL; ignore if not.
+    }
+    if (finalHost === 'accounts.google.com') {
+      return { ok: false, statusCode: response.status, error: GOOGLE_SIGNIN_REQUIRED_MESSAGE };
+    }
+
     if (response.status < 400) {
       return { ok: true, statusCode: response.status };
     }
