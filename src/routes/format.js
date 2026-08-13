@@ -7,8 +7,6 @@ const { insertRun, getRun, listRuns } = require('../lib/db');
 
 const router = express.Router();
 
-const PROMPT_VERSION = { job: 'job-prompt.v1', company: 'company-prompt.v1' };
-
 router.post('/format', async (req, res) => {
   const { type, input } = req.body || {};
 
@@ -45,7 +43,7 @@ router.post('/format', async (req, res) => {
 
     const runId = insertRun({
       type,
-      promptVersion: PROMPT_VERSION[type],
+      promptVersion: PROMPT_FILES[type].replace(/\.md$/, ''),
       sourceText,
       metadata,
       description,
