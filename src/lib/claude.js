@@ -35,7 +35,12 @@ function runClaude(fullPrompt, timeoutMs = TIMEOUT_MS) {
     child.on('close', (code) => {
       clearTimeout(timer);
       if (code !== 0) {
-        reject(new Error(`claude -p exited with code ${code}: ${stderr.slice(0, 2000)}`));
+        // Some failures (e.g. hitting the subscription's weekly usage limit)
+        // print their actual explanation to stdout, not stderr, with stderr
+        // left empty — include both so the real reason surfaces instead of
+        // a bare "exited with code 1".
+        const detail = [stderr.trim(), stdout.trim()].filter(Boolean).join(' | ');
+        reject(new Error(`claude -p exited with code ${code}: ${detail.slice(0, 2000)}`));
         return;
       }
       resolve(stdout);
