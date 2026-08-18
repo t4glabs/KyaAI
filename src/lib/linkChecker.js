@@ -34,6 +34,34 @@ const GOOGLE_SIGNIN_REQUIRED_MESSAGE =
   'treating this as a dead link.';
 
 /**
+ * "Soft 404" phrases — pages that respond with a normal 2xx status but the
+ * body itself says the posting is gone. Confirmed directly against Keka
+ * (thenudge.keka.com returned HTTP 200 with "The Job posting is not
+ * available anymore" for a job an operator had already found dead by hand
+ * and unpublished — status-code-only checking missed it entirely). The
+ * others are the same pattern on other common ATS platforms, added
+ * proactively since Keka wasn't a one-off; each is specific enough wording
+ * that it shouldn't false-positive on a real, live posting.
+ */
+const SOFT_404_PATTERNS = [
+  /job posting is not available anymore/i,
+  /may be deleted or hidden/i,
+  /this job is no longer accepting applications/i,
+  /this position has been filled/i,
+  /job you('| a)re looking for is no longer available/i,
+  /this job (posting |listing )?(is no longer|has expired)/i,
+  /career opportunity .* (has expired|is no longer available)/i,
+];
+
+function findSoft404Match(bodyText) {
+  for (const pattern of SOFT_404_PATTERNS) {
+    const match = bodyText.match(pattern);
+    if (match) return match[0];
+  }
+  return null;
+}
+
+/**
  * Checks whether a URL responds. GET only — HEAD was tried first originally
  * (cheaper, no body), but real recruitment platforms turned out to handle
  * it inconsistently: Zoho Recruit (zohorecruit.com and white-labeled
@@ -59,9 +87,6 @@ async function checkOneUrl(url) {
       signal: controller.signal,
       headers: REQUEST_HEADERS,
     });
-    // Body isn't needed — drop it without reading, so the connection can
-    // be released promptly instead of held open by an unread stream.
-    response.body?.cancel().catch(() => {});
 
     let finalHost = null;
     try {
@@ -70,10 +95,25 @@ async function checkOneUrl(url) {
       // response.url should always be a valid absolute URL; ignore if not.
     }
     if (finalHost === 'accounts.google.com') {
+      response.body?.cancel().catch(() => {});
       return { ok: false, statusCode: response.status, error: GOOGLE_SIGNIN_REQUIRED_MESSAGE };
     }
 
+    // A 2xx/3xx status doesn't guarantee the posting is actually there —
+    // some ATS platforms (confirmed on Keka) return HTTP 200 for a job page
+    // whose content plainly says the posting was deleted. Read the body to
+    // catch that "soft 404" case; job posting pages are small (a few KB),
+    // so reading it in full here is cheap.
+    const bodyText = await response.text().catch(() => '');
     if (response.status < 400) {
+      const softMatch = findSoft404Match(bodyText);
+      if (softMatch) {
+        return {
+          ok: false,
+          statusCode: response.status,
+          error: `Page loads (HTTP ${response.status}) but says the posting is gone: "${softMatch}" — this is the page's own wording, not a guess.`,
+        };
+      }
       return { ok: true, statusCode: response.status };
     }
     return { ok: false, statusCode: response.status };
