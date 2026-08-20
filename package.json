@@ -15,8 +15,10 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.10.0",
+    "chrome-launcher": "^1.2.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "html-to-text": "^9.0.5"
+    "html-to-text": "^9.0.5",
+    "lighthouse": "^12.8.2"
   }
 }

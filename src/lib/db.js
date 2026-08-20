@@ -80,6 +80,39 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS quality_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    total INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'running',
+    error TEXT
+  );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS quality_check_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    check_id INTEGER NOT NULL,
+    job_id INTEGER NOT NULL,
+    title TEXT,
+    slug TEXT,
+    job_updated_at TEXT,           -- Strapi's updatedAt at audit time — lets a later run
+                                    -- skip re-auditing a job that hasn't changed since
+    content_prompt_version TEXT,
+    content_scores TEXT,           -- JSON: {writingQuality, genderNeutralLanguage, selfContained, completeness, overall}
+    content_issues TEXT,           -- JSON: [{dimension, quote, problem, suggestion}] — quote verified against real text
+    content_strengths TEXT,        -- JSON: [string]
+    content_summary TEXT,
+    content_error TEXT,            -- set if content scoring failed for this job
+    lighthouse_scores TEXT,        -- JSON: {performance, accessibility, bestPractices, seo}
+    lighthouse_tips TEXT,          -- JSON: [{id, title, description, score}] — verbatim from Lighthouse
+    lighthouse_error TEXT,         -- set if the Lighthouse audit failed for this job
+    checked_at TEXT NOT NULL
+  );
+`);
+
 // CREATE TABLE IF NOT EXISTS won't add columns to a table that already
 // existed from an earlier version of this tool — add any missing ones.
 const NEW_COLUMNS = {
@@ -286,6 +319,102 @@ function getLatestLinkCheck() {
   return { ...check, results: annotated };
 }
 
+function isQualityCheckRunning() {
+  const check = db.prepare(`SELECT status FROM quality_checks ORDER BY id DESC LIMIT 1`).get();
+  return Boolean(check && check.status === 'running');
+}
+
+function startQualityCheck(total) {
+  const info = db.prepare(`
+    INSERT INTO quality_checks (started_at, total, status) VALUES (?, ?, 'running')
+  `).run(new Date().toISOString(), total);
+  return info.lastInsertRowid;
+}
+
+function setQualityCheckTotal(checkId, total) {
+  db.prepare(`UPDATE quality_checks SET total = ? WHERE id = ?`).run(total, checkId);
+}
+
+function finishQualityCheck(checkId, error) {
+  db.prepare(`UPDATE quality_checks SET finished_at = ?, status = 'done', error = ? WHERE id = ?`)
+    .run(new Date().toISOString(), error || null, checkId);
+}
+
+function addQualityCheckResult(checkId, result) {
+  db.prepare(`
+    INSERT INTO quality_check_results (
+      check_id, job_id, title, slug, job_updated_at,
+      content_prompt_version, content_scores, content_issues, content_strengths, content_summary, content_error,
+      lighthouse_scores, lighthouse_tips, lighthouse_error,
+      checked_at
+    ) VALUES (
+      @checkId, @jobId, @title, @slug, @jobUpdatedAt,
+      @contentPromptVersion, @contentScores, @contentIssues, @contentStrengths, @contentSummary, @contentError,
+      @lighthouseScores, @lighthouseTips, @lighthouseError,
+      @checkedAt
+    )
+  `).run({
+    checkId,
+    jobId: result.jobId,
+    title: result.title || null,
+    slug: result.slug || null,
+    jobUpdatedAt: result.jobUpdatedAt || null,
+    contentPromptVersion: result.contentPromptVersion || null,
+    contentScores: result.contentScores ? JSON.stringify(result.contentScores) : null,
+    contentIssues: result.contentIssues ? JSON.stringify(result.contentIssues) : null,
+    contentStrengths: result.contentStrengths ? JSON.stringify(result.contentStrengths) : null,
+    contentSummary: result.contentSummary || null,
+    contentError: result.contentError || null,
+    lighthouseScores: result.lighthouseScores ? JSON.stringify(result.lighthouseScores) : null,
+    lighthouseTips: result.lighthouseTips ? JSON.stringify(result.lighthouseTips) : null,
+    lighthouseError: result.lighthouseError || null,
+    checkedAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * The most recent audit result for every job that's ever been audited,
+ * regardless of which check run produced it — used to skip re-auditing a
+ * job whose content hasn't changed since its last (error-free) audit. This
+ * matters because a full audit costs real Claude usage (the mini's
+ * subscription has a weekly limit that's been hit before) and real time
+ * (Lighthouse audits a live page one at a time on shared hardware), so a
+ * routine re-run over all published jobs should mostly be free.
+ */
+function getLatestQualityResultPerJob() {
+  const rows = db.prepare(`
+    SELECT r1.*
+    FROM quality_check_results r1
+    INNER JOIN (
+      SELECT job_id, MAX(id) AS max_id
+      FROM quality_check_results
+      GROUP BY job_id
+    ) latest ON r1.job_id = latest.job_id AND r1.id = latest.max_id
+  `).all();
+  return new Map(rows.map((r) => [r.job_id, parseResultRow(r)]));
+}
+
+function parseResultRow(r) {
+  return {
+    ...r,
+    content_scores: r.content_scores ? JSON.parse(r.content_scores) : null,
+    content_issues: r.content_issues ? JSON.parse(r.content_issues) : null,
+    content_strengths: r.content_strengths ? JSON.parse(r.content_strengths) : null,
+    lighthouse_scores: r.lighthouse_scores ? JSON.parse(r.lighthouse_scores) : null,
+    lighthouse_tips: r.lighthouse_tips ? JSON.parse(r.lighthouse_tips) : null,
+  };
+}
+
+/** The most recent check, plus how many results are in so far (for a progress bar while running). */
+function getLatestQualityCheck() {
+  const check = db.prepare(`SELECT * FROM quality_checks ORDER BY id DESC LIMIT 1`).get();
+  if (!check) return null;
+  const results = db.prepare(`
+    SELECT * FROM quality_check_results WHERE check_id = ? ORDER BY id ASC
+  `).all(check.id);
+  return { ...check, results: results.map(parseResultRow) };
+}
+
 module.exports = {
   db,
   insertRun,
@@ -307,4 +436,11 @@ module.exports = {
   getLatestLinkCheck,
   dismissJobLink,
   undismissJobLink,
+  isQualityCheckRunning,
+  startQualityCheck,
+  setQualityCheckTotal,
+  finishQualityCheck,
+  addQualityCheckResult,
+  getLatestQualityResultPerJob,
+  getLatestQualityCheck,
 };

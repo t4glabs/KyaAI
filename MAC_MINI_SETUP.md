@@ -204,11 +204,16 @@ immediately, but Express only registers server-side routes once at startup.
 If a new feature added a new API route and you only `git pull` without
 restarting, the page will load fine but any new endpoint will 404 with
 `Cannot POST/GET ...` — that's the exact symptom, and it means the running
-process is still the old one. Every update needs both steps:
+process is still the old one. And if `package.json` changed (a new
+dependency was added), skipping `npm install` fails differently — the
+server won't even start, crashing on `Cannot find module '...'` in
+`logs/err.log`. Every update needs all three steps (the third is a no-op,
+and fast, when nothing actually changed):
 
 ```bash
 cd ~/Desktop/KyaAI
 git pull
+npm install
 launchctl unload ~/Library/LaunchAgents/space.aikyam.job-composer.plist
 launchctl load ~/Library/LaunchAgents/space.aikyam.job-composer.plist
 ```

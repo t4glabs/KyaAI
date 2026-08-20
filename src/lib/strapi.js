@@ -176,6 +176,35 @@ async function getAllPublishedJobsWithApplicationUrl() {
   return all.filter((job) => job.applicationUrl && job.applicationUrl.trim());
 }
 
+/**
+ * Every published job's title, slug, description, and updatedAt — for the
+ * quality-audit tab. updatedAt lets the checker skip re-scoring/re-auditing
+ * a job that hasn't changed since its last audit.
+ */
+async function getAllPublishedJobsForQualityAudit() {
+  const params = new URLSearchParams();
+  params.set('filters[publishedAt][$notNull]', 'true');
+  params.set('fields[0]', 'title');
+  params.set('fields[1]', 'slug');
+  params.set('fields[2]', 'description');
+  params.set('fields[3]', 'updatedAt');
+
+  const all = await fetchAllPages('jobs', params, (entry) => ({
+    id: entry.id,
+    title: entry.attributes.title,
+    slug: entry.attributes.slug,
+    description: entry.attributes.description,
+    updatedAt: entry.attributes.updatedAt,
+  }));
+  return all.filter((job) => job.description && job.description.trim());
+}
+
+/** The live public job page URL — this is what a candidate actually sees
+ * (and what Lighthouse should audit), not the Strapi API/admin origin. */
+function publicJobUrl(slug) {
+  return `${apiOrigin()}/jobs/${slug}`;
+}
+
 const COMPANY_NAME_NOISE_WORDS = new Set([
   'the', 'ltd', 'limited', 'pvt', 'private', 'llp', 'inc', 'incorporated', 'co',
 ]);
@@ -474,5 +503,7 @@ module.exports = {
   searchJobs,
   searchCompanies,
   getAllPublishedJobsWithApplicationUrl,
+  getAllPublishedJobsForQualityAudit,
+  publicJobUrl,
   findSimilarCompanies,
 };

@@ -6,6 +6,7 @@ const pushRoutes = require('./routes/push');
 const insightsRoutes = require('./routes/insights');
 const sourcesRoutes = require('./routes/sources');
 const linkCheckRoutes = require('./routes/link-check');
+const qualityRoutes = require('./routes/quality');
 const { pollPublishedEntries } = require('./lib/poller');
 
 const app = express();
@@ -19,6 +20,7 @@ app.use('/api', pushRoutes);
 app.use('/api', insightsRoutes);
 app.use('/api', sourcesRoutes);
 app.use('/api', linkCheckRoutes);
+app.use('/api', qualityRoutes);
 
 app.listen(PORT, () => {
   console.log(`job-composer running at http://localhost:${PORT}`);

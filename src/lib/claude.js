@@ -79,6 +79,23 @@ function extractFences(text) {
 }
 
 /**
+ * Extracts and parses a single ```json ... ``` fence — for prompts that
+ * only produce analysis/scoring output, not a paired markdown body (unlike
+ * extractFences, used by the job/company formatting pipeline).
+ */
+function extractJsonFence(text) {
+  const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
+  if (!jsonMatch) {
+    throw new Error('No ```json fence found in Claude output');
+  }
+  try {
+    return JSON.parse(jsonMatch[1].trim());
+  } catch (err) {
+    throw new Error(`Could not parse JSON fence: ${err.message}`);
+  }
+}
+
+/**
  * Runs the full format pipeline: system prompt + source text -> parsed
  * { metadata, description } object.
  */
@@ -88,4 +105,4 @@ async function formatWithClaude(systemPrompt, sourceText) {
   return { ...extractFences(rawOutput), rawOutput };
 }
 
-module.exports = { runClaude, extractFences, formatWithClaude };
+module.exports = { runClaude, extractFences, extractJsonFence, formatWithClaude };

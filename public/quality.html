@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aikyam Jobs — Quality Audit</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Job Posting Quality Audit</h1>
+    <p class="subtitle">
+      Scores every published job's writing quality, inclusive language, whether it's
+      understandable on its own, and completeness — plus a real Lighthouse audit of the
+      live page (performance, accessibility, SEO, best practices).
+      <a href="index.html">Composer</a> · <a href="sources.html">Sources</a> · <a href="insights.html">Insights</a> · <a href="link-check.html">Link Check</a>
+    </p>
+  </header>
+
+  <main>
+    <section class="results-panel">
+      <div class="sources-header">
+        <h2>Run an audit</h2>
+        <button id="startBtn">Audit all published jobs</button>
+      </div>
+      <p class="hint">
+        Every content issue below comes with an exact quote copied from the actual
+        posting — verified in code against the real text, so nothing here is a guess
+        or a paraphrase. Every Lighthouse tip is Lighthouse's own audit wording,
+        unedited. A job that hasn't changed since its last audit is skipped and its
+        previous score carried forward, so the first run is the slow one — this
+        audits a real live page per job (Lighthouse) plus a Claude call per job, so a
+        full run over every published job can take a long time.
+      </p>
+      <p id="checkMeta" class="hint"></p>
+      <div id="progressBar" class="field-bar-row" style="display:none">
+        <div class="field-bar-label">Progress</div>
+        <div class="field-bar-track"><div id="progressFill" class="field-bar-fill" style="width:0%"></div></div>
+        <div id="progressText" class="field-bar-pct"></div>
+      </div>
+    </section>
+
+    <section class="results-panel">
+      <h2>Results <span class="hint">(worst content score first)</span></h2>
+      <p id="summary" class="hint"></p>
+      <div id="resultsList"></div>
+    </section>
+  </main>
+
+  <script src="quality.js"></script>
+</body>
+</html>
