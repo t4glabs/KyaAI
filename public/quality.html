@@ -10,27 +10,40 @@
   <header>
     <h1>Job Posting Quality Audit</h1>
     <p class="subtitle">
-      Scores every published job's writing quality, inclusive language, whether it's
-      understandable on its own, and completeness — plus a real Lighthouse audit of the
-      live page (performance, accessibility, SEO, best practices).
+      Scores writing quality, inclusive language, whether a posting is understandable
+      on its own, and completeness — plus a real Lighthouse audit of the live page
+      (performance, accessibility, SEO, best practices). Covers only the latest
+      25 published jobs, not the whole site — see the note below.
       <a href="index.html">Composer</a> · <a href="sources.html">Sources</a> · <a href="insights.html">Insights</a> · <a href="link-check.html">Link Check</a>
     </p>
   </header>
 
   <main>
     <section class="results-panel">
+      <h2>Check one job</h2>
+      <p class="hint">Pick from the latest 25 published jobs and get its score back directly (usually under a minute).</p>
       <div class="sources-header">
-        <h2>Run an audit</h2>
-        <button id="startBtn">Audit all published jobs</button>
+        <select id="jobPicker"><option value="">Loading jobs…</option></select>
+        <button id="checkOneBtn">Check this job</button>
+      </div>
+      <p id="checkOneStatus" class="hint"></p>
+    </section>
+
+    <section class="results-panel">
+      <div class="sources-header">
+        <h2>Check latest 25 jobs</h2>
+        <button id="startBtn">Check latest 25</button>
       </div>
       <p class="hint">
         Every content issue below comes with an exact quote copied from the actual
         posting — verified in code against the real text, so nothing here is a guess
         or a paraphrase. Every Lighthouse tip is Lighthouse's own audit wording,
-        unedited. A job that hasn't changed since its last audit is skipped and its
-        previous score carried forward, so the first run is the slow one — this
-        audits a real live page per job (Lighthouse) plus a Claude call per job, so a
-        full run over every published job can take a long time.
+        unedited. Only the 25 most recently published jobs are covered
+        here — most of the site's older postings are migrated-from-Ghost residue
+        nobody's going back to edit, and auditing all of them would cost real Claude
+        quota (the mini's subscription has a weekly limit) and a long time (Lighthouse
+        audits one real live page at a time). A job that hasn't changed since its last
+        audit is skipped and its previous score carried forward.
       </p>
       <p id="checkMeta" class="hint"></p>
       <div id="progressBar" class="field-bar-row" style="display:none">

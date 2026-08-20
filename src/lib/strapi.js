@@ -177,26 +177,36 @@ async function getAllPublishedJobsWithApplicationUrl() {
 }
 
 /**
- * Every published job's title, slug, description, and updatedAt — for the
- * quality-audit tab. updatedAt lets the checker skip re-scoring/re-auditing
- * a job that hasn't changed since its last audit.
+ * The most recently published jobs (title, slug, description, updatedAt) —
+ * for the quality-audit tab. Deliberately NOT every published job: most of
+ * the ~370 published jobs are old or migrated-from-Ghost residue nobody's
+ * going back to edit, and auditing all of them costs real Claude quota (the
+ * mac mini's subscription has a weekly limit already hit once) and real
+ * Lighthouse time for no real benefit — a fix only actually happens on
+ * postings someone still cares about, which skews recent. updatedAt lets
+ * the checker skip re-auditing a job that hasn't changed since last time.
  */
-async function getAllPublishedJobsForQualityAudit() {
+async function getRecentPublishedJobsForQualityAudit(limit = 25) {
   const params = new URLSearchParams();
   params.set('filters[publishedAt][$notNull]', 'true');
   params.set('fields[0]', 'title');
   params.set('fields[1]', 'slug');
   params.set('fields[2]', 'description');
   params.set('fields[3]', 'updatedAt');
+  params.set('sort[0]', 'publishedAt:desc');
+  params.set('pagination[pageSize]', String(limit));
+  params.set('pagination[page]', '1');
 
-  const all = await fetchAllPages('jobs', params, (entry) => ({
-    id: entry.id,
-    title: entry.attributes.title,
-    slug: entry.attributes.slug,
-    description: entry.attributes.description,
-    updatedAt: entry.attributes.updatedAt,
-  }));
-  return all.filter((job) => job.description && job.description.trim());
+  const data = await strapiGet(`/jobs?${params.toString()}`);
+  return (data.data || [])
+    .map((entry) => ({
+      id: entry.id,
+      title: entry.attributes.title,
+      slug: entry.attributes.slug,
+      description: entry.attributes.description,
+      updatedAt: entry.attributes.updatedAt,
+    }))
+    .filter((job) => job.description && job.description.trim());
 }
 
 /** The live public job page URL — this is what a candidate actually sees
@@ -503,7 +513,7 @@ module.exports = {
   searchJobs,
   searchCompanies,
   getAllPublishedJobsWithApplicationUrl,
-  getAllPublishedJobsForQualityAudit,
+  getRecentPublishedJobsForQualityAudit,
   publicJobUrl,
   findSimilarCompanies,
 };

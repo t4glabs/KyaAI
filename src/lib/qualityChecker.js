@@ -1,4 +1,4 @@
-const { getAllPublishedJobsForQualityAudit, publicJobUrl } = require('./strapi');
+const { getRecentPublishedJobsForQualityAudit, publicJobUrl } = require('./strapi');
 const { scoreJobContent } = require('./contentQuality');
 const { auditUrl, closeChrome } = require('./lighthouseAudit');
 const {
@@ -10,23 +10,82 @@ const {
   getLatestQualityResultPerJob,
 } = require('./db');
 
+const RECENT_LIMIT = 25;
+
 /**
- * Runs in the background — the route that triggers this responds
- * immediately. Fully sequential, one job at a time (content score, then
- * Lighthouse audit, then the next job) rather than a concurrent worker
- * pool: Lighthouse shares a single headless Chrome instance so it can't
- * safely run more than one audit at a time anyway, and content scoring
- * uses the mac mini's Claude subscription, which has a weekly usage limit
- * that's already been hit once — there's no upside to burning through it
- * faster, and the mini also runs several unrelated services that a heavy
- * concurrent batch could compete with.
- *
- * A job whose Strapi updatedAt hasn't changed since its last (error-free)
- * audit is skipped and its previous result is carried forward under the
- * new check_id, so a routine re-run over all published jobs mostly costs
- * nothing — only genuinely new or edited jobs get re-audited.
+ * Scores one job's content and audits its live page, unless it's unchanged
+ * since its last error-free audit — in which case that previous result is
+ * carried forward instead of spending Claude/Lighthouse cost again.
  */
-async function runQualityCheck() {
+async function auditOneJob(job, previous) {
+  const unchanged =
+    previous &&
+    previous.job_updated_at === job.updatedAt &&
+    !previous.content_error &&
+    !previous.lighthouse_error;
+
+  if (unchanged) {
+    return {
+      jobId: job.id,
+      title: job.title,
+      slug: job.slug,
+      jobUpdatedAt: job.updatedAt,
+      contentPromptVersion: previous.content_prompt_version,
+      contentScores: previous.content_scores,
+      contentIssues: previous.content_issues,
+      contentStrengths: previous.content_strengths,
+      contentSummary: previous.content_summary,
+      lighthouseScores: previous.lighthouse_scores,
+      lighthouseTips: previous.lighthouse_tips,
+    };
+  }
+
+  let contentResult = null;
+  let contentError = null;
+  try {
+    contentResult = await scoreJobContent({ title: job.title, description: job.description });
+  } catch (err) {
+    contentError = err.message;
+  }
+
+  let lighthouseResult = null;
+  let lighthouseError = null;
+  try {
+    lighthouseResult = await auditUrl(publicJobUrl(job.slug));
+  } catch (err) {
+    lighthouseError = err.message;
+  }
+
+  return {
+    jobId: job.id,
+    title: job.title,
+    slug: job.slug,
+    jobUpdatedAt: job.updatedAt,
+    contentPromptVersion: contentResult?.promptVersion,
+    contentScores: contentResult?.scores,
+    contentIssues: contentResult?.issues,
+    contentStrengths: contentResult?.strengths,
+    contentSummary: contentResult?.summary,
+    contentError,
+    lighthouseScores: lighthouseResult?.scores,
+    lighthouseTips: lighthouseResult?.tips,
+    lighthouseError,
+  };
+}
+
+/**
+ * Audits the most recently published `limit` jobs (25 by default) — not
+ * every published job on the site. Most of the ~370 published jobs are old
+ * or migrated-from-Ghost residue nobody's going back to edit, and auditing
+ * all of them costs real Claude quota (the mac mini's subscription has a
+ * weekly limit already hit once from ordinary day-to-day use) and real
+ * Lighthouse time (one shared headless Chrome, sequential, on a machine
+ * that also runs several unrelated services) for little practical benefit
+ * — a fix only happens on a posting someone still cares about, which skews
+ * recent. Runs in the background — the route that triggers this responds
+ * immediately.
+ */
+async function runQualityCheckBatch(limit = RECENT_LIMIT) {
   if (isQualityCheckRunning()) {
     throw new Error('A quality check is already running');
   }
@@ -35,7 +94,7 @@ async function runQualityCheck() {
 
   let jobs;
   try {
-    jobs = await getAllPublishedJobsForQualityAudit();
+    jobs = await getRecentPublishedJobsForQualityAudit(limit);
   } catch (err) {
     finishQualityCheck(checkId, `Could not fetch the job list from Strapi: ${err.message}`);
     throw err;
@@ -46,61 +105,8 @@ async function runQualityCheck() {
 
   try {
     for (const job of jobs) {
-      const previous = previousResults.get(job.id);
-      const unchanged =
-        previous &&
-        previous.job_updated_at === job.updatedAt &&
-        !previous.content_error &&
-        !previous.lighthouse_error;
-
-      if (unchanged) {
-        addQualityCheckResult(checkId, {
-          jobId: job.id,
-          title: job.title,
-          slug: job.slug,
-          jobUpdatedAt: job.updatedAt,
-          contentPromptVersion: previous.content_prompt_version,
-          contentScores: previous.content_scores,
-          contentIssues: previous.content_issues,
-          contentStrengths: previous.content_strengths,
-          contentSummary: previous.content_summary,
-          lighthouseScores: previous.lighthouse_scores,
-          lighthouseTips: previous.lighthouse_tips,
-        });
-        continue;
-      }
-
-      let contentResult = null;
-      let contentError = null;
-      try {
-        contentResult = await scoreJobContent({ title: job.title, description: job.description });
-      } catch (err) {
-        contentError = err.message;
-      }
-
-      let lighthouseResult = null;
-      let lighthouseError = null;
-      try {
-        lighthouseResult = await auditUrl(publicJobUrl(job.slug));
-      } catch (err) {
-        lighthouseError = err.message;
-      }
-
-      addQualityCheckResult(checkId, {
-        jobId: job.id,
-        title: job.title,
-        slug: job.slug,
-        jobUpdatedAt: job.updatedAt,
-        contentPromptVersion: contentResult?.promptVersion,
-        contentScores: contentResult?.scores,
-        contentIssues: contentResult?.issues,
-        contentStrengths: contentResult?.strengths,
-        contentSummary: contentResult?.summary,
-        contentError,
-        lighthouseScores: lighthouseResult?.scores,
-        lighthouseTips: lighthouseResult?.tips,
-        lighthouseError,
-      });
+      const result = await auditOneJob(job, previousResults.get(job.id));
+      addQualityCheckResult(checkId, result);
     }
   } finally {
     await closeChrome();
@@ -110,4 +116,35 @@ async function runQualityCheck() {
   return checkId;
 }
 
-module.exports = { runQualityCheck };
+/**
+ * On-demand audit of a single job, picked from the same latest-25 list the
+ * UI's dropdown shows — deliberately not "any job by id," since the whole
+ * point of this tab is to stay out of the long tail of old postings.
+ * Synchronous (like /api/format's "up to a minute" call) rather than the
+ * background+poll pattern, since it's only ever one job.
+ */
+async function runQualityCheckOne(jobId) {
+  if (isQualityCheckRunning()) {
+    throw new Error('A quality check is already running');
+  }
+
+  const jobs = await getRecentPublishedJobsForQualityAudit(RECENT_LIMIT);
+  const job = jobs.find((j) => j.id === Number(jobId));
+  if (!job) {
+    throw new Error('That job is not among the latest 25 published jobs anymore — refresh the list and try again.');
+  }
+
+  const checkId = startQualityCheck(1);
+  const previous = getLatestQualityResultPerJob().get(job.id);
+
+  try {
+    const result = await auditOneJob(job, previous);
+    addQualityCheckResult(checkId, result);
+  } finally {
+    await closeChrome();
+  }
+
+  finishQualityCheck(checkId);
+}
+
+module.exports = { runQualityCheckBatch, runQualityCheckOne, RECENT_LIMIT };

@@ -79,6 +79,18 @@ textarea {
   resize: vertical;
 }
 
+select {
+  font-family: inherit;
+  font-size: 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+  background: var(--bg);
+  color: var(--fg);
+  flex: 1;
+  min-width: 0;
+}
+
 button {
   margin-top: 0.75rem;
   background: var(--accent);

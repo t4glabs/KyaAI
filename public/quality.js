@@ -5,6 +5,9 @@ const progressFill = document.getElementById('progressFill');
 const progressText = document.getElementById('progressText');
 const summary = document.getElementById('summary');
 const resultsList = document.getElementById('resultsList');
+const jobPicker = document.getElementById('jobPicker');
+const checkOneBtn = document.getElementById('checkOneBtn');
+const checkOneStatus = document.getElementById('checkOneStatus');
 
 let pollTimer = null;
 
@@ -136,24 +139,25 @@ function render(check) {
 
   const isRunning = check.status === 'running';
   startBtn.disabled = isRunning;
+  checkOneBtn.disabled = isRunning;
 
   if (check.error) {
     checkMeta.innerHTML = `<span class="lookup-new">Failed: ${escapeHtml(check.error)}</span>`;
   } else {
     checkMeta.textContent = isRunning
       ? `Running — started ${formatWhen(check.started_at)}`
-      : `Last audited ${formatWhen(check.finished_at)} (started ${formatWhen(check.started_at)})`;
+      : `Last check finished ${formatWhen(check.finished_at)} (started ${formatWhen(check.started_at)})`;
   }
 
   progressBar.style.display = isRunning ? 'flex' : 'none';
   if (isRunning) {
-    const pct = check.total > 0 ? Math.round((check.results.length / check.total) * 100) : 0;
+    const pct = check.total > 0 ? Math.round((check.progressCount / check.total) * 100) : 0;
     progressFill.style.width = `${pct}%`;
-    progressText.textContent = `${check.results.length} / ${check.total}`;
+    progressText.textContent = `${check.progressCount} / ${check.total}`;
   }
 
   summary.textContent = check.results.length > 0
-    ? `${check.results.length} of ${check.total} audited so far.`
+    ? `${check.results.length} job(s) with a score so far (across every check ever run, latest per job).`
     : 'No results yet.';
 
   const sorted = [...check.results].sort((a, b) => {
@@ -180,7 +184,7 @@ async function loadLatest() {
 
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
-  const response = await fetch('/api/quality/start', { method: 'POST' });
+  const response = await fetch('/api/quality/check-batch', { method: 'POST' });
   if (!response.ok) {
     const data = await response.json();
     checkMeta.textContent = `Error: ${data.error}`;
@@ -188,6 +192,46 @@ startBtn.addEventListener('click', async () => {
     return;
   }
   loadLatest();
+});
+
+async function loadJobPicker() {
+  const response = await fetch('/api/quality/jobs');
+  const jobs = await response.json();
+  if (!response.ok) {
+    jobPicker.innerHTML = '<option value="">Could not load jobs</option>';
+    return;
+  }
+  jobPicker.innerHTML = jobs.length
+    ? jobs.map((j) => `<option value="${j.id}">${escapeHtml(j.title)}</option>`).join('')
+    : '<option value="">No published jobs found</option>';
+}
+
+checkOneBtn.addEventListener('click', async () => {
+  const jobId = jobPicker.value;
+  if (!jobId) return;
+
+  checkOneBtn.disabled = true;
+  startBtn.disabled = true;
+  checkOneStatus.textContent = 'Checking... this usually takes under a minute.';
+
+  try {
+    const response = await fetch('/api/quality/check-one', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jobId }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Check failed');
+    }
+    checkOneStatus.textContent = 'Done — see its updated score in the list below.';
+  } catch (err) {
+    checkOneStatus.textContent = `Error: ${err.message}`;
+  } finally {
+    checkOneBtn.disabled = false;
+    startBtn.disabled = false;
+    loadLatest();
+  }
 });
 
 resultsList.addEventListener('click', (e) => {
@@ -200,3 +244,4 @@ resultsList.addEventListener('click', (e) => {
 });
 
 loadLatest();
+loadJobPicker();

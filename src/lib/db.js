@@ -405,14 +405,26 @@ function parseResultRow(r) {
   };
 }
 
-/** The most recent check, plus how many results are in so far (for a progress bar while running). */
+/** Every job's latest result, across all check runs — a single on-demand
+ * check and a 25-job batch both feed the same accumulating list, so
+ * checking one job never shrinks what's shown for the rest. */
+function listLatestQualityResults() {
+  return Array.from(getLatestQualityResultPerJob().values());
+}
+
+/**
+ * The most recent check (for status/progress while running), plus the full
+ * accumulated latest-per-job results list (for display) — these are
+ * different things on purpose: progressCount is scoped to just the
+ * currently-running (or last) check_id so the progress bar makes sense,
+ * while `results` is every job's latest result ever, so a small check
+ * doesn't make previously-checked jobs disappear from the list.
+ */
 function getLatestQualityCheck() {
   const check = db.prepare(`SELECT * FROM quality_checks ORDER BY id DESC LIMIT 1`).get();
   if (!check) return null;
-  const results = db.prepare(`
-    SELECT * FROM quality_check_results WHERE check_id = ? ORDER BY id ASC
-  `).all(check.id);
-  return { ...check, results: results.map(parseResultRow) };
+  const progressCount = db.prepare(`SELECT COUNT(*) AS n FROM quality_check_results WHERE check_id = ?`).get(check.id).n;
+  return { ...check, progressCount, results: listLatestQualityResults() };
 }
 
 module.exports = {
@@ -442,5 +454,6 @@ module.exports = {
   finishQualityCheck,
   addQualityCheckResult,
   getLatestQualityResultPerJob,
+  listLatestQualityResults,
   getLatestQualityCheck,
 };
