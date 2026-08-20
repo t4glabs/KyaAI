@@ -32,7 +32,7 @@ function verifyIssuesAgainstSource(issues, sourceText) {
         dimension: SCORE_DIMENSIONS.includes(issue.dimension) ? issue.dimension : 'writingQuality',
         quote,
         problem: String(issue.problem || '').trim(),
-        suggestion: String(issue.suggestion || '').trim(),
+        replacement: String(issue.replacement || '').trim(),
       });
     } else {
       droppedUnverifiable += 1;

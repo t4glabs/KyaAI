@@ -301,6 +301,143 @@ button:disabled { opacity: 0.6; cursor: default; }
   margin-left: 0.5rem;
 }
 
+.score-group-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0.6rem 0 0.3rem;
+}
+.score-group-label:first-of-type { margin-top: 0.5rem; }
+
+.score-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+}
+
+.score-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15rem 0.65rem;
+  font-size: 0.8rem;
+}
+.score-chip.lookup-ok, .score-chip.lookup-new { border-color: currentColor; }
+.score-chip-value { font-weight: 700; }
+
+.job-score-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  margin: 0 0.4rem;
+}
+
+.job-summary {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  margin: 0.4rem 0 0.6rem;
+}
+
+.strengths-list {
+  margin: 0 0 0.6rem;
+  padding-left: 1.2rem;
+}
+.strengths-list li {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 0.3rem;
+}
+
+.issue-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.6rem;
+  background: var(--bg);
+}
+.issue-card:last-child { margin-bottom: 0.6rem; }
+
+.issue-dimension {
+  align-self: flex-start;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+}
+
+.issue-quote {
+  font-style: italic;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--fg);
+  border-left: 3px solid var(--border);
+  padding-left: 0.7rem;
+}
+
+.issue-problem {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--fg);
+}
+
+.issue-replacement {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: var(--accent-bg);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+}
+
+.issue-replacement-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.issue-replacement-label {
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.issue-replacement-text {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--fg);
+}
+
+.issue-copy-btn {
+  margin: 0;
+  padding: 0.15rem 0.65rem;
+  font-size: 0.75rem;
+}
+
 .sources-header {
   display: flex;
   align-items: center;

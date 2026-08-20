@@ -102,7 +102,7 @@ db.exec(`
                                     -- skip re-auditing a job that hasn't changed since
     content_prompt_version TEXT,
     content_scores TEXT,           -- JSON: {writingQuality, genderNeutralLanguage, selfContained, completeness, overall}
-    content_issues TEXT,           -- JSON: [{dimension, quote, problem, suggestion}] — quote verified against real text
+    content_issues TEXT,           -- JSON: [{dimension, quote, problem, replacement}] — quote verified against real text; replacement is paste-ready text, not advice
     content_strengths TEXT,        -- JSON: [string]
     content_summary TEXT,
     content_error TEXT,            -- set if content scoring failed for this job

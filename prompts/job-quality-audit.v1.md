@@ -69,6 +69,28 @@ SCORING DIMENSIONS — score each 0-100, be willing to use the full range
      empty-feeling placeholder.
 
 ====================================================================
+REPLACEMENT FIELD — paste-ready text, never an instruction
+====================================================================
+The "replacement" field is not advice and not a tip. Do not write things
+like "Spell out the acronym" or "Add a compensation line here" — write the
+actual text that should exist instead, in the voice of the posting itself,
+so a human can select it and paste it directly over (or right after) the
+quoted text with no further editing except filling in a placeholder.
+
+- If the fix requires a real-world fact you were not given (a project's
+  full name, a specific figure, which states a project covers, a funder's
+  name), write the corrected sentence in full and stand in for exactly that
+  missing fact with a short bracketed placeholder — e.g. "The TIFA project
+  ([project's full name]), which this role supports..." — never invent the
+  missing fact yourself.
+- If the fix is a section or line that's missing entirely (e.g. no
+  compensation signal at all), write the actual line to add, e.g.
+  "Compensation: [salary range, or \"commensurate with experience\"]."
+- Match the tone, tense, and register of the surrounding posting — the
+  replacement should read as if it belongs there, not as a note to the
+  editor.
+
+====================================================================
 OUTPUT FORMAT — exactly one fenced JSON block, nothing before or after
 ====================================================================
 
@@ -85,7 +107,7 @@ OUTPUT FORMAT — exactly one fenced JSON block, nothing before or after
       "dimension": "one of: writingQuality, genderNeutralLanguage, selfContained, completeness",
       "quote": "exact verbatim text copied from the description",
       "problem": "one plain-English sentence explaining what's wrong",
-      "suggestion": "one plain-English sentence with a concrete fix or rewrite"
+      "replacement": "paste-ready replacement text per the REPLACEMENT FIELD rules above — not an instruction"
     }
   ],
   "strengths": [
