@@ -172,8 +172,21 @@ function render(check) {
 }
 
 async function loadLatest() {
-  const response = await fetch('/api/quality/latest');
-  const check = await response.json();
+  let check;
+  try {
+    const response = await fetch('/api/quality/latest');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    check = await response.json();
+  } catch (err) {
+    // A transient blip here (e.g. an auth redirect page instead of the real
+    // response) shouldn't silently kill the poll loop while a batch check is
+    // genuinely still running server-side — show it and keep retrying.
+    checkMeta.innerHTML = `<span class="lookup-new">Could not reach the server: ${escapeHtml(err.message)} — retrying...</span>`;
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(loadLatest, 3000);
+    return;
+  }
+
   render(check);
 
   if (check && check.status === 'running') {
@@ -195,15 +208,22 @@ startBtn.addEventListener('click', async () => {
 });
 
 async function loadJobPicker() {
-  const response = await fetch('/api/quality/jobs');
-  const jobs = await response.json();
-  if (!response.ok) {
-    jobPicker.innerHTML = '<option value="">Could not load jobs</option>';
-    return;
+  try {
+    const response = await fetch('/api/quality/jobs');
+    if (!response.ok) {
+      jobPicker.innerHTML = `<option value="">Could not load jobs (HTTP ${response.status})</option>`;
+      return;
+    }
+    const jobs = await response.json();
+    jobPicker.innerHTML = jobs.length
+      ? jobs.map((j) => `<option value="${j.id}">${escapeHtml(j.title)}</option>`).join('')
+      : '<option value="">No published jobs found</option>';
+  } catch (err) {
+    // Covers a non-JSON response too (e.g. an auth redirect page instead of
+    // the real API response) — response.json() throwing here previously left
+    // the dropdown stuck on "Loading jobs…" forever with no visible error.
+    jobPicker.innerHTML = `<option value="">Could not load jobs: ${escapeHtml(err.message)}</option>`;
   }
-  jobPicker.innerHTML = jobs.length
-    ? jobs.map((j) => `<option value="${j.id}">${escapeHtml(j.title)}</option>`).join('')
-    : '<option value="">No published jobs found</option>';
 }
 
 checkOneBtn.addEventListener('click', async () => {
