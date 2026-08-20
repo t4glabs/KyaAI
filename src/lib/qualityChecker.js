@@ -1,4 +1,9 @@
-const { getRecentPublishedJobsForQualityAudit, publicJobUrl } = require('./strapi');
+const {
+  getRecentPublishedJobsForQualityAudit,
+  publicJobUrl,
+  slugFromJobUrl,
+  getPublishedJobBySlug,
+} = require('./strapi');
 const { scoreJobContent } = require('./contentQuality');
 const { auditUrl, closeChrome } = require('./lighthouseAudit');
 const {
@@ -11,6 +16,11 @@ const {
 } = require('./db');
 
 const RECENT_LIMIT = 25;
+// The "check one job" picker (and the id lookup behind it) intentionally
+// shows a few more jobs than a batch check covers — browsing a slightly
+// longer list to pick one on-demand job costs nothing, unlike auditing all
+// of them in a batch, which spends real Claude/Lighthouse cost per job.
+const PICKER_LIMIT = 30;
 
 /**
  * Scores one job's content and audits its live page, unless it's unchanged
@@ -117,9 +127,9 @@ async function runQualityCheckBatch(limit = RECENT_LIMIT) {
 }
 
 /**
- * On-demand audit of a single job, picked from the same latest-25 list the
- * UI's dropdown shows — deliberately not "any job by id," since the whole
- * point of this tab is to stay out of the long tail of old postings.
+ * On-demand audit of a single job, picked from the latest-PICKER_LIMIT list
+ * the UI's dropdown shows — deliberately not "any job by id," since the
+ * whole point of this tab is to stay out of the long tail of old postings.
  * Synchronous (like /api/format's "up to a minute" call) rather than the
  * background+poll pattern, since it's only ever one job.
  */
@@ -128,10 +138,10 @@ async function runQualityCheckOne(jobId) {
     throw new Error('A quality check is already running');
   }
 
-  const jobs = await getRecentPublishedJobsForQualityAudit(RECENT_LIMIT);
+  const jobs = await getRecentPublishedJobsForQualityAudit(PICKER_LIMIT);
   const job = jobs.find((j) => j.id === Number(jobId));
   if (!job) {
-    throw new Error('That job is not among the latest 25 published jobs anymore — refresh the list and try again.');
+    throw new Error(`That job is not among the latest ${PICKER_LIMIT} published jobs anymore — refresh the list and try again.`);
   }
 
   const checkId = startQualityCheck(1);
@@ -147,4 +157,42 @@ async function runQualityCheckOne(jobId) {
   finishQualityCheck(checkId);
 }
 
-module.exports = { runQualityCheckBatch, runQualityCheckOne, RECENT_LIMIT };
+/**
+ * On-demand audit of a single job identified by its live aikyamjobs.org
+ * URL, rather than picked from the recent-jobs dropdown — so a job that's
+ * fallen out of the latest 30 (or someone just has the live URL open) can
+ * still be checked directly, without being limited to the recent-N list
+ * runQualityCheckOne uses.
+ */
+async function runQualityCheckByUrl(url) {
+  if (isQualityCheckRunning()) {
+    throw new Error('A quality check is already running');
+  }
+
+  const slug = slugFromJobUrl(url);
+  if (!slug) {
+    throw new Error("That doesn't look like a live aikyamjobs.org job URL — expected something like https://aikyamjobs.org/jobs/<slug>.");
+  }
+
+  const job = await getPublishedJobBySlug(slug);
+  if (!job) {
+    throw new Error('No published job found at that URL — it may have been unpublished, deleted, or the slug is wrong.');
+  }
+  if (!job.description || !job.description.trim()) {
+    throw new Error('That job has no description to audit.');
+  }
+
+  const checkId = startQualityCheck(1);
+  const previous = getLatestQualityResultPerJob().get(job.id);
+
+  try {
+    const result = await auditOneJob(job, previous);
+    addQualityCheckResult(checkId, result);
+  } finally {
+    await closeChrome();
+  }
+
+  finishQualityCheck(checkId);
+}
+
+module.exports = { runQualityCheckBatch, runQualityCheckOne, runQualityCheckByUrl, RECENT_LIMIT, PICKER_LIMIT };

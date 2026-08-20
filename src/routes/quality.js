@@ -1,14 +1,14 @@
 const express = require('express');
-const { runQualityCheckBatch, runQualityCheckOne, RECENT_LIMIT } = require('../lib/qualityChecker');
+const { runQualityCheckBatch, runQualityCheckOne, runQualityCheckByUrl, PICKER_LIMIT } = require('../lib/qualityChecker');
 const { isQualityCheckRunning, getLatestQualityCheck } = require('../lib/db');
 const { adminEditUrl, publicJobUrl, getRecentPublishedJobsForQualityAudit } = require('../lib/strapi');
 
 const router = express.Router();
 
-/** The latest 25 published jobs' id+title, for the "check one job" picker. */
+/** The latest 30 published jobs' id+title, for the "check one job" picker. */
 router.get('/quality/jobs', async (req, res) => {
   try {
-    const jobs = await getRecentPublishedJobsForQualityAudit(RECENT_LIMIT);
+    const jobs = await getRecentPublishedJobsForQualityAudit(PICKER_LIMIT);
     res.json(jobs.map((j) => ({ id: j.id, title: j.title })));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -36,6 +36,22 @@ router.post('/quality/check-one', async (req, res) => {
   }
   try {
     await runQualityCheckOne(jobId);
+    res.json({ done: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/quality/check-url', async (req, res) => {
+  const { url } = req.body || {};
+  if (!url) {
+    return res.status(400).json({ error: 'url is required' });
+  }
+  if (isQualityCheckRunning()) {
+    return res.status(409).json({ error: 'A quality check is already running' });
+  }
+  try {
+    await runQualityCheckByUrl(url);
     res.json({ done: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

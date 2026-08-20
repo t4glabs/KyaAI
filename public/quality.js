@@ -8,6 +8,9 @@ const resultsList = document.getElementById('resultsList');
 const jobPicker = document.getElementById('jobPicker');
 const checkOneBtn = document.getElementById('checkOneBtn');
 const checkOneStatus = document.getElementById('checkOneStatus');
+const jobUrlInput = document.getElementById('jobUrlInput');
+const checkUrlBtn = document.getElementById('checkUrlBtn');
+const checkUrlStatus = document.getElementById('checkUrlStatus');
 
 let pollTimer = null;
 
@@ -167,6 +170,7 @@ function render(check) {
   const isRunning = check.status === 'running';
   startBtn.disabled = isRunning;
   checkOneBtn.disabled = isRunning;
+  checkUrlBtn.disabled = isRunning;
 
   if (check.error) {
     checkMeta.innerHTML = `<span class="lookup-new">Failed: ${escapeHtml(check.error)}</span>`;
@@ -258,6 +262,7 @@ checkOneBtn.addEventListener('click', async () => {
   if (!jobId) return;
 
   checkOneBtn.disabled = true;
+  checkUrlBtn.disabled = true;
   startBtn.disabled = true;
   checkOneStatus.textContent = 'Checking... this usually takes under a minute.';
 
@@ -275,6 +280,37 @@ checkOneBtn.addEventListener('click', async () => {
   } catch (err) {
     checkOneStatus.textContent = `Error: ${err.message}`;
   } finally {
+    checkOneBtn.disabled = false;
+    checkUrlBtn.disabled = false;
+    startBtn.disabled = false;
+    loadLatest();
+  }
+});
+
+checkUrlBtn.addEventListener('click', async () => {
+  const url = jobUrlInput.value.trim();
+  if (!url) return;
+
+  checkUrlBtn.disabled = true;
+  checkOneBtn.disabled = true;
+  startBtn.disabled = true;
+  checkUrlStatus.textContent = 'Checking... this usually takes under a minute.';
+
+  try {
+    const response = await fetch('/api/quality/check-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Check failed');
+    }
+    checkUrlStatus.textContent = 'Done — see its updated score in the list below.';
+  } catch (err) {
+    checkUrlStatus.textContent = `Error: ${err.message}`;
+  } finally {
+    checkUrlBtn.disabled = false;
     checkOneBtn.disabled = false;
     startBtn.disabled = false;
     loadLatest();

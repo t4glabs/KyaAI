@@ -21,12 +21,21 @@
   <main>
     <section class="results-panel">
       <h2>Check one job</h2>
-      <p class="hint">Pick from the latest 25 published jobs and get its score back directly (usually under a minute).</p>
+      <p class="hint">Pick from the latest 30 published jobs and get its score back directly (usually under a minute).</p>
       <div class="sources-header">
         <select id="jobPicker"><option value="">Loading jobs…</option></select>
         <button id="checkOneBtn">Check this job</button>
       </div>
       <p id="checkOneStatus" class="hint"></p>
+
+      <p class="hint" style="margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border);">
+        Or paste a live job URL from aikyamjobs.org — this works for any published job, not just the latest 30.
+      </p>
+      <div class="add-source-form">
+        <input type="url" id="jobUrlInput" placeholder="https://aikyamjobs.org/jobs/some-job-slug">
+        <button id="checkUrlBtn">Check this URL</button>
+      </div>
+      <p id="checkUrlStatus" class="hint"></p>
     </section>
 
     <section class="results-panel">
