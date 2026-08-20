@@ -216,61 +216,6 @@ function publicJobUrl(slug) {
 }
 
 /**
- * The inverse of publicJobUrl — pulls the slug back out of a pasted live
- * job page URL, e.g. for the quality-audit tab's "check this URL" input.
- * Deliberately strict (exact origin match, exact /jobs/<slug> path) so a
- * mistyped or unrelated URL fails with a clear message instead of silently
- * mismatching. Never used to fetch the pasted URL directly — Lighthouse and
- * the content scorer always audit publicJobUrl(slug)/the Strapi record we
- * ourselves resolve, so a pasted URL never gets handed straight to code
- * that fetches it.
- */
-function parseJobSlugFromUrl(url) {
-  let parsed;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error("That doesn't look like a valid URL.");
-  }
-  if (parsed.origin !== apiOrigin()) {
-    throw new Error(`That URL isn't on ${apiOrigin()} — paste the live job page URL from this site.`);
-  }
-  const match = parsed.pathname.match(/^\/jobs\/([^/]+)\/?$/);
-  if (!match) {
-    throw new Error("That URL doesn't look like a job page (expected .../jobs/<slug>).");
-  }
-  return match[1];
-}
-
-/**
- * Fetches one published job by its exact slug (title, slug, description,
- * updatedAt — same shape as getRecentPublishedJobsForQualityAudit) for the
- * quality-audit tab's "check this URL" input, where the job might be any
- * published posting, not just one of the ones the recent-jobs picker shows.
- * Returns null if there's no published job at that slug.
- */
-async function getPublishedJobBySlugForQualityAudit(slug) {
-  const params = new URLSearchParams();
-  params.set('filters[slug][$eq]', slug);
-  params.set('filters[publishedAt][$notNull]', 'true');
-  params.set('fields[0]', 'title');
-  params.set('fields[1]', 'slug');
-  params.set('fields[2]', 'description');
-  params.set('fields[3]', 'updatedAt');
-
-  const data = await strapiGet(`/jobs?${params.toString()}`);
-  const entry = data.data && data.data[0];
-  if (!entry) return null;
-  return {
-    id: entry.id,
-    title: entry.attributes.title,
-    slug: entry.attributes.slug,
-    description: entry.attributes.description,
-    updatedAt: entry.attributes.updatedAt,
-  };
-}
-
-/**
  * The inverse of publicJobUrl — pulls the slug back out of a pasted live job
  * URL for the quality tab's "check this URL" input. Only accepts a URL on
  * this instance's own configured origin (not just any site's /jobs/<slug>
