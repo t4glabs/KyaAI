@@ -6,8 +6,12 @@ const { PROMPT_FILES } = require('./promptLoader');
 const PROMPTS_DIR = path.join(__dirname, '..', '..', 'prompts');
 
 // Fields that exist in the AI's output but aren't real Strapi schema fields —
-// don't count these in the "how often does this field get edited" stats.
-const NON_SCHEMA_FIELDS = new Set(['reviewFlags', 'socialCard', 'linkedinPost']);
+// don't count these in the "how often does this field get edited" stats. They
+// never appear in the published entry, so they'd otherwise always read as 100%
+// "edited" and drown out the fields that are genuinely hand-tuned. reviewNotes
+// and reviewFlags are review-only guidance for the operator; socialCard and
+// linkedinPost are off-platform fields the CMS drops on ingest.
+const NON_SCHEMA_FIELDS = new Set(['reviewFlags', 'reviewNotes', 'socialCard', 'linkedinPost']);
 
 function valuesEqual(a, b) {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
