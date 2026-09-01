@@ -31,6 +31,7 @@ const FIELD_LABELS = {
   closingDate: 'Closing Date',
   applicationUrl: 'Application URL',
   applicationEmail: 'Application Email',
+  applyMode: 'Apply Mode',
   categories: 'Categories (Job Category)',
   impactArea: 'Impact Area (Area of Work)',
   skills: 'Skills',
@@ -115,6 +116,125 @@ function renderField(key, value, reviewFlags) {
   return wrapper;
 }
 
+const APPLY_MODE_OPTIONS = [
+  ['gated', 'gated — native "Apply with aikyamjobs" flow (needs a checklist)'],
+  ['external', 'external — old "Apply now" button to the raw link'],
+  ['auto', 'auto — follow the site default'],
+];
+
+/** Apply Mode as a <select> rather than a free-text box — it's a fixed enum
+ * (auto/external/gated) and the gated option is the one the checklist below
+ * depends on. */
+function renderApplyModeField(value) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'field-box';
+
+  const label = document.createElement('label');
+  label.textContent = FIELD_LABELS.applyMode;
+  wrapper.appendChild(label);
+
+  const select = document.createElement('select');
+  select.dataset.key = 'applyMode';
+  APPLY_MODE_OPTIONS.forEach(([val, text]) => {
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = text;
+    if (val === (value || 'gated')) opt.selected = true;
+    select.appendChild(opt);
+  });
+  wrapper.appendChild(select);
+  return wrapper;
+}
+
+/** One editable checklist row: label / weight / required / remove. */
+function renderChecklistRow(item) {
+  const row = document.createElement('div');
+  row.className = 'checklist-row';
+
+  const labelInput = document.createElement('input');
+  labelInput.type = 'text';
+  labelInput.className = 'cl-label';
+  labelInput.placeholder = 'I have 3+ years of experience in ...';
+  labelInput.value = (item && item.label) || '';
+
+  const weightInput = document.createElement('input');
+  weightInput.type = 'number';
+  weightInput.className = 'cl-weight';
+  weightInput.min = '1';
+  weightInput.max = '10';
+  weightInput.title = 'Weight 1-10 — how much this item matters to the match';
+  weightInput.value = item && Number.isFinite(Number(item.weight)) ? Number(item.weight) : 1;
+
+  const requiredLabel = document.createElement('label');
+  requiredLabel.className = 'cl-required-label';
+  const requiredInput = document.createElement('input');
+  requiredInput.type = 'checkbox';
+  requiredInput.className = 'cl-required';
+  requiredInput.checked = Boolean(item && item.required);
+  requiredLabel.appendChild(requiredInput);
+  requiredLabel.appendChild(document.createTextNode(' required'));
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'cl-remove';
+  removeBtn.textContent = '×';
+  removeBtn.title = 'Remove this item';
+  removeBtn.addEventListener('click', () => row.remove());
+
+  row.appendChild(labelInput);
+  row.appendChild(weightInput);
+  row.appendChild(requiredLabel);
+  row.appendChild(removeBtn);
+  return row;
+}
+
+/** The requirement-checklist editor for gated jobs. Rows are the self-assessment
+ * statements a candidate ticks on the apply page; each carries a required flag
+ * and a 1-10 weight. Strapi refuses to publish a gated job with an empty list. */
+function renderChecklistEditor(items) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'field-box checklist-editor';
+  wrapper.dataset.checklistEditor = 'true';
+
+  const label = document.createElement('label');
+  label.textContent = 'Requirement Checklist (gated apply — self-assessment)';
+  wrapper.appendChild(label);
+
+  const hint = document.createElement('p');
+  hint.className = 'hint';
+  hint.textContent = 'Shown as checkboxes on the apply page ("tick what applies to you"). Built from the Requirements bullets. A gated job needs at least one item.';
+  wrapper.appendChild(hint);
+
+  const rows = document.createElement('div');
+  rows.className = 'checklist-rows';
+  (Array.isArray(items) ? items : []).forEach((item) => rows.appendChild(renderChecklistRow(item)));
+  wrapper.appendChild(rows);
+
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'copy-btn cl-add';
+  addBtn.textContent = '+ Add item';
+  addBtn.addEventListener('click', () => rows.appendChild(renderChecklistRow({ weight: 1 })));
+  wrapper.appendChild(addBtn);
+
+  return wrapper;
+}
+
+/** Reads the checklist editor back into [{label, required, weight}], dropping
+ * rows with an empty label and clamping weight to the schema's 1-10 range. */
+function collectChecklistFrom(editor) {
+  const items = [];
+  editor.querySelectorAll('.checklist-row').forEach((row) => {
+    const label = row.querySelector('.cl-label').value.trim();
+    if (!label) return;
+    let weight = Math.round(Number(row.querySelector('.cl-weight').value));
+    if (!Number.isFinite(weight)) weight = 1;
+    weight = Math.min(10, Math.max(1, weight));
+    items.push({ label, required: row.querySelector('.cl-required').checked, weight });
+  });
+  return items;
+}
+
 function copyToClipboard(text, btn) {
   navigator.clipboard.writeText(text).then(() => {
     const original = btn.textContent;
@@ -195,13 +315,18 @@ function collectEditedMetadataFrom(container, type) {
   const metadata = {};
   const arrayFields = new Set(ARRAY_FIELDS[type] || []);
 
-  container.querySelectorAll('textarea[data-key]').forEach((el) => {
+  container.querySelectorAll('textarea[data-key], select[data-key]').forEach((el) => {
     const key = el.dataset.key;
     if (PUSH_EXCLUDE_KEYS.has(key)) return;
     metadata[key] = arrayFields.has(key)
       ? el.value.split(',').map((s) => s.trim()).filter(Boolean)
       : el.value;
   });
+
+  const checklistEditor = container.querySelector('[data-checklist-editor]');
+  if (checklistEditor) {
+    metadata.requirementChecklist = collectChecklistFrom(checklistEditor);
+  }
 
   return metadata;
 }
@@ -216,6 +341,14 @@ function renderMetadataFields(container, metadata, reviewFlags) {
   container.innerHTML = '';
   Object.entries(metadata).forEach(([key, value]) => {
     if (key === 'reviewFlags') return;
+    if (key === 'applyMode') {
+      container.appendChild(renderApplyModeField(value));
+      return;
+    }
+    if (key === 'requirementChecklist') {
+      container.appendChild(renderChecklistEditor(value));
+      return;
+    }
     if (key === 'socialCard' && value && typeof value === 'object') {
       container.appendChild(renderField('socialCard.title', value.title, reviewFlags));
       container.appendChild(renderField('socialCard.description', value.description, reviewFlags));

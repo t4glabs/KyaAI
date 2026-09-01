@@ -182,6 +182,79 @@ button:disabled { opacity: 0.6; cursor: default; }
 
 .hint { font-weight: normal; color: var(--muted); font-size: 0.85rem; }
 
+.field-box select {
+  flex: 1;
+  font-family: inherit;
+  font-size: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* The requirement-checklist editor stacks its rows vertically to the right of
+   the field label, unlike the single-line field boxes. */
+.checklist-editor {
+  flex-direction: column;
+  align-items: stretch;
+}
+.checklist-editor > label { flex: none; padding-top: 0; }
+.checklist-editor .hint { margin: 0.2rem 0 0.5rem; }
+
+.checklist-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.checklist-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.checklist-row .cl-label {
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg);
+  color: var(--fg);
+}
+.checklist-row .cl-weight {
+  flex: 0 0 3.5rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.4rem;
+  background: var(--bg);
+  color: var(--fg);
+}
+.checklist-row .cl-required-label {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  padding: 0;
+  white-space: nowrap;
+}
+.checklist-row .cl-remove {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0.2rem 0.55rem;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  font-size: 1rem;
+  line-height: 1;
+}
+.cl-add { margin-top: 0.5rem; align-self: flex-start; }
+
 .lookup-ok { color: var(--ok); }
 .lookup-new { color: var(--new); }
 

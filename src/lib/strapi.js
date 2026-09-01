@@ -359,6 +359,29 @@ async function requireExistingCompanyId(name) {
   return check.id;
 }
 
+// Repeatable `apply.checklist-item` component on Job: { label, required, weight }.
+// weight is a schema-constrained integer 1-10 (min/max enforced in Strapi); the
+// prompt asks Claude to stay in range, but a stray float/out-of-range value would
+// be rejected by Strapi, so clamp deterministically here. Items with no usable
+// label are dropped rather than sent as an invalid component.
+const CHECKLIST_WEIGHT_MIN = 1;
+const CHECKLIST_WEIGHT_MAX = 10;
+
+function sanitizeChecklist(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const label = typeof item.label === 'string' ? item.label.trim() : '';
+      if (!label) return null;
+      let weight = Math.round(Number(item.weight));
+      if (!Number.isFinite(weight)) weight = 1;
+      weight = Math.min(CHECKLIST_WEIGHT_MAX, Math.max(CHECKLIST_WEIGHT_MIN, weight));
+      return { label, required: item.required === true, weight };
+    })
+    .filter(Boolean);
+}
+
 function stripEmpty(obj) {
   const out = {};
   for (const [key, value] of Object.entries(obj)) {
@@ -427,6 +450,18 @@ async function createJobDraft(metadata, description) {
   }
   const slug = await generateUniqueSlug('jobs', metadata.title);
 
+  const checklist = sanitizeChecklist(metadata.requirementChecklist);
+  const applyMode = metadata.applyMode;
+  // Strapi's own job lifecycle refuses to save applyMode "gated" without at
+  // least one checklist item (that guard is what stops the "Apply with
+  // aikyamjobs" button appearing on an unprepped JD). Fail early here with a
+  // clear message rather than letting it surface as a raw 400 from Strapi.
+  if (applyMode === 'gated' && checklist.length === 0) {
+    throw new Error(
+      'applyMode is "gated" but the requirement checklist is empty. Add at least one checklist item (or set apply mode to external) before pushing.'
+    );
+  }
+
   const payload = stripEmpty({
     title: metadata.title,
     slug,
@@ -438,6 +473,8 @@ async function createJobDraft(metadata, description) {
     closingDate: toIsoDateOrUndefined(metadata.closingDate),
     applicationUrl: metadata.applicationUrl,
     applicationEmail: metadata.applicationEmail,
+    applyMode,
+    requirementChecklist: checklist,
     skills: metadata.skills,
     keywords: metadata.keywords,
     impactArea: metadata.impactArea,
@@ -507,6 +544,12 @@ function normalizeJobAttributes(a) {
     closingDate: a.closingDate,
     applicationUrl: a.applicationUrl,
     applicationEmail: a.applicationEmail,
+    applyMode: a.applyMode,
+    // Repeatable component comes back as a plain array (not the {data:[...]}
+    // relation wrapper). Normalize to the same {label, required, weight} shape
+    // the tool sends, dropping Strapi's per-item id/internal keys.
+    requirementChecklist: (Array.isArray(a.requirementChecklist) ? a.requirementChecklist : [])
+      .map((item) => ({ label: item.label, required: item.required === true, weight: item.weight })),
     categories: (a.categories?.data || []).map((c) => c.attributes.name),
     impactArea: a.impactArea,
     skills: a.skills,
@@ -538,7 +581,7 @@ function normalizeCompanyAttributes(a) {
  */
 async function getEntrySnapshot(contentType, id) {
   const plural = contentType === 'job' ? 'jobs' : 'companies';
-  const populate = contentType === 'job' ? 'company,categories' : '';
+  const populate = contentType === 'job' ? 'company,categories,requirementChecklist' : '';
   const query = populate ? `?populate=${populate}` : '';
   const { data } = await strapiGet(`/${plural}/${id}${query}`);
   const a = data.attributes;
