@@ -37,6 +37,7 @@ async function auditOneJob(job, previous) {
   if (unchanged) {
     return {
       jobId: job.id,
+      documentId: job.documentId,
       title: job.title,
       slug: job.slug,
       jobUpdatedAt: job.updatedAt,
@@ -68,6 +69,7 @@ async function auditOneJob(job, previous) {
 
   return {
     jobId: job.id,
+    documentId: job.documentId,
     title: job.title,
     slug: job.slug,
     jobUpdatedAt: job.updatedAt,

@@ -120,6 +120,9 @@ const NEW_COLUMNS = {
   pushed_at: 'TEXT',
   pushed_metadata: 'TEXT',
   pushed_description: 'TEXT',
+  // Strapi 5 single-entry routes and admin links need the documentId; the
+  // numeric strapi_entry_id is per-version there and changes on republish.
+  strapi_document_id: 'TEXT',
 };
 const existingColumns = new Set(db.prepare('PRAGMA table_info(runs)').all().map((c) => c.name));
 for (const [column, sqlType] of Object.entries(NEW_COLUMNS)) {
@@ -138,6 +141,15 @@ if (!existingDismissalColumns.has('note')) {
   db.exec(`ALTER TABLE link_dismissals ADD COLUMN note TEXT`);
 }
 
+// Stored alongside job_id so the "open in Strapi" links can use the Strapi 5
+// documentId. Rows saved before this column existed have it NULL.
+for (const table of ['link_check_results', 'quality_check_results']) {
+  const columns = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name));
+  if (!columns.has('document_id')) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN document_id TEXT`);
+  }
+}
+
 function insertRun({ type, promptVersion, sourceText, metadata, description }) {
   const stmt = db.prepare(`
     INSERT INTO runs (type, prompt_version, created_at, source_text, ai_metadata, ai_description)
@@ -154,10 +166,11 @@ function insertRun({ type, promptVersion, sourceText, metadata, description }) {
   return info.lastInsertRowid;
 }
 
-function markPushed(runId, { strapiEntryId, contentType, metadata, description }) {
+function markPushed(runId, { strapiEntryId, strapiDocumentId, contentType, metadata, description }) {
   db.prepare(`
     UPDATE runs
     SET strapi_entry_id = @strapiEntryId,
+        strapi_document_id = @strapiDocumentId,
         strapi_content_type = @contentType,
         pushed_at = @pushedAt,
         pushed_metadata = @pushedMetadata,
@@ -166,6 +179,7 @@ function markPushed(runId, { strapiEntryId, contentType, metadata, description }
   `).run({
     runId,
     strapiEntryId,
+    strapiDocumentId: strapiDocumentId || null,
     contentType,
     pushedAt: new Date().toISOString(),
     pushedMetadata: JSON.stringify(metadata),
@@ -206,7 +220,7 @@ function listRuns(limit = 50) {
  */
 function listPushedRuns() {
   return db.prepare(`
-    SELECT id, strapi_entry_id, strapi_content_type
+    SELECT id, strapi_entry_id, strapi_document_id, strapi_content_type
     FROM runs
     WHERE strapi_entry_id IS NOT NULL
   `).all();
@@ -259,13 +273,14 @@ function setLinkCheckTotal(checkId, total) {
   db.prepare(`UPDATE link_checks SET total = ? WHERE id = ?`).run(total, checkId);
 }
 
-function addLinkCheckResult(checkId, { jobId, title, slug, applicationUrl, ok, statusCode, error }) {
+function addLinkCheckResult(checkId, { jobId, documentId, title, slug, applicationUrl, ok, statusCode, error }) {
   db.prepare(`
-    INSERT INTO link_check_results (check_id, job_id, title, slug, application_url, ok, status_code, error, checked_at)
-    VALUES (@checkId, @jobId, @title, @slug, @applicationUrl, @ok, @statusCode, @error, @checkedAt)
+    INSERT INTO link_check_results (check_id, job_id, document_id, title, slug, application_url, ok, status_code, error, checked_at)
+    VALUES (@checkId, @jobId, @documentId, @title, @slug, @applicationUrl, @ok, @statusCode, @error, @checkedAt)
   `).run({
     checkId,
     jobId,
+    documentId: documentId || null,
     title: title || null,
     slug: slug || null,
     applicationUrl,
@@ -343,12 +358,12 @@ function finishQualityCheck(checkId, error) {
 function addQualityCheckResult(checkId, result) {
   db.prepare(`
     INSERT INTO quality_check_results (
-      check_id, job_id, title, slug, job_updated_at,
+      check_id, job_id, document_id, title, slug, job_updated_at,
       content_prompt_version, content_scores, content_issues, content_strengths, content_summary, content_error,
       lighthouse_scores, lighthouse_tips, lighthouse_error,
       checked_at
     ) VALUES (
-      @checkId, @jobId, @title, @slug, @jobUpdatedAt,
+      @checkId, @jobId, @documentId, @title, @slug, @jobUpdatedAt,
       @contentPromptVersion, @contentScores, @contentIssues, @contentStrengths, @contentSummary, @contentError,
       @lighthouseScores, @lighthouseTips, @lighthouseError,
       @checkedAt
@@ -356,6 +371,7 @@ function addQualityCheckResult(checkId, result) {
   `).run({
     checkId,
     jobId: result.jobId,
+    documentId: result.documentId || null,
     title: result.title || null,
     slug: result.slug || null,
     jobUpdatedAt: result.jobUpdatedAt || null,

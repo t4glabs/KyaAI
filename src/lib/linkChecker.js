@@ -153,6 +153,7 @@ async function runLinkCheck() {
       const result = await checkOneUrl(job.applicationUrl);
       addLinkCheckResult(checkId, {
         jobId: job.id,
+        documentId: job.documentId,
         title: job.title,
         slug: job.slug,
         applicationUrl: job.applicationUrl,

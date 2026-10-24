@@ -83,6 +83,9 @@ async function checkCompany(name) {
     slug,
     exists: Boolean(found),
     id: found ? found.id : null,
+    // Strapi 5 single-entry routes (PUT /companies/:x) take the documentId,
+    // not the numeric id — see upsertCompanyDraft.
+    documentId: found ? found.documentId : null,
   };
 }
 
@@ -100,13 +103,16 @@ async function searchJobs({ title, companyName } = {}) {
   params.set('populate', 'company');
   params.set('pagination[pageSize]', '10');
 
+  // Strapi 5 responses are flat: fields sit directly on the entry, and a
+  // populated relation is the related entry itself (no data/attributes wrapper).
   const data = await strapiGet(`/jobs?${params.toString()}`);
   return (data.data || []).map((entry) => ({
     id: entry.id,
-    title: entry.attributes.title,
-    companyName: entry.attributes.company?.data?.attributes?.name ?? null,
-    slug: entry.attributes.slug,
-    publishedAt: entry.attributes.publishedAt,
+    documentId: entry.documentId,
+    title: entry.title,
+    companyName: entry.company?.name ?? null,
+    slug: entry.slug,
+    publishedAt: entry.publishedAt,
   }));
 }
 
@@ -118,9 +124,10 @@ async function searchCompanies(name) {
   const data = await strapiGet(`/companies?${params.toString()}`);
   return (data.data || []).map((entry) => ({
     id: entry.id,
-    name: entry.attributes.name,
-    slug: entry.attributes.slug,
-    publishedAt: entry.attributes.publishedAt,
+    documentId: entry.documentId,
+    name: entry.name,
+    slug: entry.slug,
+    publishedAt: entry.publishedAt,
   }));
 }
 
@@ -169,9 +176,10 @@ async function getAllPublishedJobsWithApplicationUrl() {
 
   const all = await fetchAllPages('jobs', params, (entry) => ({
     id: entry.id,
-    title: entry.attributes.title,
-    applicationUrl: entry.attributes.applicationUrl,
-    slug: entry.attributes.slug,
+    documentId: entry.documentId,
+    title: entry.title,
+    applicationUrl: entry.applicationUrl,
+    slug: entry.slug,
   }));
   return all.filter((job) => job.applicationUrl && job.applicationUrl.trim());
 }
@@ -201,10 +209,11 @@ async function getRecentPublishedJobsForQualityAudit(limit = 25) {
   return (data.data || [])
     .map((entry) => ({
       id: entry.id,
-      title: entry.attributes.title,
-      slug: entry.attributes.slug,
-      description: entry.attributes.description,
-      updatedAt: entry.attributes.updatedAt,
+      documentId: entry.documentId,
+      title: entry.title,
+      slug: entry.slug,
+      description: entry.description,
+      updatedAt: entry.updatedAt,
     }))
     .filter((job) => job.description && job.description.trim());
 }
@@ -257,10 +266,11 @@ async function getPublishedJobBySlug(slug) {
 
   return {
     id: entry.id,
-    title: entry.attributes.title,
-    slug: entry.attributes.slug,
-    description: entry.attributes.description,
-    updatedAt: entry.attributes.updatedAt,
+    documentId: entry.documentId,
+    title: entry.title,
+    slug: entry.slug,
+    description: entry.description,
+    updatedAt: entry.updatedAt,
   };
 }
 
@@ -317,8 +327,8 @@ async function findSimilarCompanies(name, { limit = 5, minScore = 0.3 } = {}) {
   params.set('fields[1]', 'slug');
   const all = await fetchAllPages('companies', params, (entry) => ({
     id: entry.id,
-    name: entry.attributes.name,
-    slug: entry.attributes.slug,
+    name: entry.name,
+    slug: entry.slug,
   }));
 
   return all
@@ -337,10 +347,10 @@ async function findOrCreateCategory(name) {
   const slug = slugify(name);
   const existing = await strapiGet(`/categories?filters[slug][$eq]=${encodeURIComponent(slug)}`);
   const found = existing.data && existing.data[0];
-  if (found) return found.id;
+  if (found) return found.documentId;
 
   const created = await strapiPost('/categories', { name, slug });
-  return created.data.id;
+  return created.data.documentId;
 }
 
 /**
@@ -356,7 +366,7 @@ async function requireExistingCompanyId(name) {
       `Company "${name}" does not exist in Strapi yet. Format and push its company profile first, then push this job.`
     );
   }
-  return check.id;
+  return check.documentId;
 }
 
 // Repeatable `apply.checklist-item` component on Job: { label, required, weight }.
@@ -436,7 +446,7 @@ async function generateUniqueSlug(plural, name) {
 }
 
 /**
- * Creates a Job entry as a Draft (no publishedAt set — Strapi's
+ * Creates a Job entry as a Draft (?status=draft — Strapi's
  * draftAndPublish leaves it unpublished until someone publishes it in the
  * admin). Resolves company (must already exist) and categories (created if
  * missing) to Strapi relation ids first.
@@ -482,23 +492,24 @@ async function createJobDraft(metadata, description) {
     metaTitle: clampToLength(metadata.metaTitle, META_TITLE_MAX),
     metaDescription: clampToLength(metadata.metaDescription, META_DESCRIPTION_MAX),
   });
+  // Strapi 5 links relations by documentId — a numeric id here is silently
+  // ignored (the job saves with no company/categories, no error), so both
+  // helpers above return documentIds.
   payload.company = companyId;
   payload.categories = categoryIds;
-  // Strapi's core create service defaults publishedAt to "now" when the key
-  // is absent from the payload — omitting it does NOT mean draft, it means
-  // published immediately. Must be explicit. (stripEmpty() above would have
-  // silently dropped this if it were included in that object, since it
-  // filters out nulls — that's why it's set here, after.)
-  payload.publishedAt = null;
 
-  const created = await strapiPost('/jobs', payload);
+  // On this Strapi 5 instance a create with no ?status publishes immediately,
+  // and a publishedAt: null in the body is ignored (v4's way of asking for a
+  // draft) — confirmed against the live API. ?status=draft is what keeps it
+  // a draft until someone publishes it in the admin.
+  const created = await strapiPost('/jobs?status=draft', payload);
   return created.data;
 }
 
 /**
  * Creates or updates a Company entry. Update path is used when the operator
  * is refreshing/correcting a profile that already exists (matched by slug).
- * Also created as a Draft — no publishedAt set.
+ * Also created (or updated) as a Draft — ?status=draft.
  */
 async function upsertCompanyDraft(metadata, description) {
   const existing = await checkCompany(metadata.name);
@@ -518,25 +529,34 @@ async function upsertCompanyDraft(metadata, description) {
   if (existing.exists) {
     // Don't touch slug on update — changing it would change the company's
     // published URL, and the name (hence slug) already matched on lookup.
-    const updated = await strapiPut(`/companies/${existing.id}`, payload);
+    // Strapi 5's single-entry routes need the documentId — the numeric id
+    // 404s. As with create, a PUT without ?status=draft publishes the entry
+    // straight away; with it, the change lands in the draft for review and
+    // goes live when someone publishes it in the admin.
+    const updated = await strapiPut(`/companies/${existing.documentId}?status=draft`, payload);
     return updated.data;
   }
   payload.slug = await generateUniqueSlug('companies', metadata.name);
-  // See the identical comment in createJobDraft — omitting publishedAt here
-  // means "publish immediately," not "draft." Must be explicit.
-  payload.publishedAt = null;
-  const created = await strapiPost('/companies', payload);
+  // See the comment in createJobDraft — ?status=draft is what makes a draft.
+  const created = await strapiPost('/companies?status=draft', payload);
   return created.data;
 }
 
-function adminEditUrl(contentType, id) {
-  return `${apiOrigin()}/admin/content-manager/collection-types/api::${contentType}.${contentType}/${id}`;
+/**
+ * Strapi 5's admin edit view resolves documents by documentId — a numeric id
+ * here lands on the admin's "Whoops! Something went wrong" screen. Returns
+ * null when no documentId is known (e.g. rows logged before the v5 upgrade),
+ * so callers can hide the link rather than show a broken one.
+ */
+function adminEditUrl(contentType, documentId) {
+  if (!documentId) return null;
+  return `${apiOrigin()}/admin/content-manager/collection-types/api::${contentType}.${contentType}/${documentId}`;
 }
 
 function normalizeJobAttributes(a) {
   return {
     title: a.title,
-    companyName: a.company?.data?.attributes?.name ?? null,
+    companyName: a.company?.name ?? null,
     location: a.location,
     jobType: a.jobType,
     experienceLevel: a.experienceLevel,
@@ -550,7 +570,7 @@ function normalizeJobAttributes(a) {
     // the tool sends, dropping Strapi's per-item id/internal keys.
     requirementChecklist: (Array.isArray(a.requirementChecklist) ? a.requirementChecklist : [])
       .map((item) => ({ label: item.label, required: item.required === true, weight: item.weight })),
-    categories: (a.categories?.data || []).map((c) => c.attributes.name),
+    categories: (Array.isArray(a.categories) ? a.categories : []).map((c) => c.name),
     impactArea: a.impactArea,
     skills: a.skills,
     keywords: a.keywords,
@@ -574,26 +594,39 @@ function normalizeCompanyAttributes(a) {
 }
 
 /**
- * Fetches a single Job or Company by id and normalizes Strapi v4's
- * {id, attributes: {...}} wrapper (and any populated relations) down to the
+ * Fetches a single Job or Company by documentId and normalizes it down to the
  * same flat shape used for ai_metadata, so the poller can store a directly
  * comparable "final" snapshot. Used by the publish-poller.
+ *
+ * Strapi 5 keeps a draft and a published version per document, and a plain
+ * GET returns only the published one — 404 if the document has never been
+ * published (or was unpublished). That's not "deleted", so on 404 this checks
+ * for a draft and reports { publishedAt: null } if one exists, matching v4's
+ * "exists but not live" response. A 404 on both means the document is gone.
  */
-async function getEntrySnapshot(contentType, id) {
+async function getEntrySnapshot(contentType, documentId) {
   const plural = contentType === 'job' ? 'jobs' : 'companies';
   const populate = contentType === 'job' ? 'company,categories,requirementChecklist' : '';
   const query = populate ? `?populate=${populate}` : '';
-  const { data } = await strapiGet(`/${plural}/${id}${query}`);
-  const a = data.attributes;
+
+  let data;
+  try {
+    ({ data } = await strapiGet(`/${plural}/${documentId}${query}`));
+  } catch (err) {
+    if (err.status !== 404) throw err;
+    await strapiGet(`/${plural}/${documentId}?status=draft`); // rethrows 404 if truly deleted
+    return { publishedAt: null, metadata: null, description: null };
+  }
 
   return {
-    publishedAt: a.publishedAt,
-    metadata: contentType === 'job' ? normalizeJobAttributes(a) : normalizeCompanyAttributes(a),
-    description: a.description,
+    publishedAt: data.publishedAt,
+    metadata: contentType === 'job' ? normalizeJobAttributes(data) : normalizeCompanyAttributes(data),
+    description: data.description,
   };
 }
 
 module.exports = {
+  strapiGet,
   checkCategories,
   checkCompany,
   slugify,

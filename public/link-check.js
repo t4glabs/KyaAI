@@ -39,7 +39,7 @@ function renderRow(r, { dismissed }) {
         </div>
         <input type="text" class="note-input" placeholder="Note for future reference (optional)" value="${escapeHtml(r.note || '')}">
       </div>
-      <a href="${r.adminUrl}" target="_blank" rel="noopener noreferrer">View in Strapi →</a>
+      ${r.adminUrl ? `<a href="${r.adminUrl}" target="_blank" rel="noopener noreferrer">View in Strapi →</a>` : ''}
       ${noteBtn}
       ${actionBtn}
     </div>

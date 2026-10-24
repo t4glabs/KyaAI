@@ -24,6 +24,7 @@ router.post('/push', async (req, res) => {
 
     markPushed(runId, {
       strapiEntryId: entry.id,
+      strapiDocumentId: entry.documentId,
       contentType: type,
       metadata,
       description,
@@ -32,7 +33,7 @@ router.post('/push', async (req, res) => {
     res.json({
       success: true,
       entryId: entry.id,
-      adminUrl: adminEditUrl(type, entry.id),
+      adminUrl: adminEditUrl(type, entry.documentId),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

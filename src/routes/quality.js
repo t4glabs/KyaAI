@@ -63,7 +63,7 @@ router.get('/quality/latest', (req, res) => {
   if (!check) return res.json(null);
   check.results = check.results.map((r) => ({
     ...r,
-    adminUrl: adminEditUrl('job', r.job_id),
+    adminUrl: adminEditUrl('job', r.document_id),
     liveUrl: r.slug ? publicJobUrl(r.slug) : null,
   }));
   res.json(check);

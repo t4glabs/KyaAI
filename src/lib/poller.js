@@ -17,10 +17,18 @@ async function pollPublishedEntries() {
   let updated = 0;
   let gone = 0;
   let errors = 0;
+  let untracked = 0;
 
   for (const run of pushed) {
+    // Strapi 5 single-entry routes only accept the documentId. Runs pushed
+    // before it was recorded (and not resolved by backfill-document-ids.js)
+    // can't be looked up — skip them quietly instead of 404ing every poll.
+    if (!run.strapi_document_id) {
+      untracked += 1;
+      continue;
+    }
     try {
-      const snapshot = await getEntrySnapshot(run.strapi_content_type, run.strapi_entry_id);
+      const snapshot = await getEntrySnapshot(run.strapi_content_type, run.strapi_document_id);
       if (snapshot.publishedAt) {
         markPublished(run.id, { metadata: snapshot.metadata, description: snapshot.description });
         updated += 1;
@@ -32,18 +40,19 @@ async function pollPublishedEntries() {
       // is just noise; genuine failures (network issues, 5xx) still count.
       if (err.status === 404) {
         gone += 1;
-        console.log(`[poller] run ${run.id} (${run.strapi_content_type} #${run.strapi_entry_id}): no longer exists in Strapi (deleted)`);
+        console.log(`[poller] run ${run.id} (${run.strapi_content_type} ${run.strapi_document_id}): no longer exists in Strapi (deleted)`);
       } else {
         errors += 1;
-        console.error(`[poller] run ${run.id} (${run.strapi_content_type} #${run.strapi_entry_id}): ${err.message}`);
+        console.error(`[poller] run ${run.id} (${run.strapi_content_type} ${run.strapi_document_id}): ${err.message}`);
       }
     }
   }
 
   if (pushed.length > 0) {
-    console.log(`[poller] checked ${pushed.length} pushed run(s): ${updated} currently live (final snapshot refreshed), ${gone} gone (deleted in Strapi), ${errors} error(s)`);
+    const untrackedNote = untracked > 0 ? `, ${untracked} skipped (no documentId recorded)` : '';
+    console.log(`[poller] checked ${pushed.length - untracked} pushed run(s): ${updated} currently live (final snapshot refreshed), ${gone} gone (deleted in Strapi), ${errors} error(s)${untrackedNote}`);
   }
-  return { checked: pushed.length, updated, gone, errors };
+  return { checked: pushed.length - untracked, updated, gone, errors, untracked };
 }
 
 module.exports = { pollPublishedEntries };

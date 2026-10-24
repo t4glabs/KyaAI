@@ -139,7 +139,7 @@ function renderRow(r) {
         <div>
           ${escapeHtml(r.title || `Job #${r.job_id}`)}
           <span class="job-score-badge ${scoreClass(overall)}">${overall === null || overall === undefined ? 'n/a' : overall}</span>
-          — <a href="${r.adminUrl}" target="_blank" rel="noopener noreferrer">Strapi &rarr;</a>
+          ${r.adminUrl ? `— <a href="${r.adminUrl}" target="_blank" rel="noopener noreferrer">Strapi &rarr;</a>` : ''}
           ${r.liveUrl ? `· <a href="${r.liveUrl}" target="_blank" rel="noopener noreferrer">View live &rarr;</a>` : ''}
         </div>
         <div class="score-group-label">Content</div>
