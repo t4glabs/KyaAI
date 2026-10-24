@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "poll": "node src/poll-once.js",
-    "suggest-revision": "node src/suggest-revision.js"
+    "suggest-revision": "node src/suggest-revision.js",
+    "backup": "node src/backup-db.js"
   },
   "engines": {
     "node": ">=20"

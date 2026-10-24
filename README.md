@@ -189,7 +189,7 @@ proposal from the browser. That stays a deliberate file-rename step (see
 above): infrequent, high-stakes, and meant to be read carefully rather than
 clicked through.
 
-## Running it 24/7 on the Mac Mini
+## Running it 24/7 on the production host
 
 See `MAC_MINI_SETUP.md` for the full checklist — `launchd` to keep the
 process running, and a Cloudflare Tunnel (not Tailscale/VPN) so Greeshma and
