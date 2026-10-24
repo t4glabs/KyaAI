@@ -28,15 +28,26 @@ async function main() {
   const currentVersion = currentFileName.replace(/\.md$/, '');
   const currentPromptText = fs.readFileSync(path.join(PROMPTS_DIR, currentFileName), 'utf8');
 
+  // `claude -p` rejects a single prompt built from everything as "too long"
+  // once the example count gets large (confirmed failing at 197) — cap to
+  // the most recent N, which is also a more relevant signal than old runs.
+  const MAX_EXAMPLES = 40;
+
   // Only compare runs produced by the CURRENTLY active prompt version — once
   // a revision ships, older runs are a different era and not a fair signal
   // for what's wrong with the prompt in use today.
+  const totalCount = db.prepare(`
+    SELECT COUNT(*) AS count FROM runs
+    WHERE type = ? AND prompt_version = ? AND final_metadata IS NOT NULL
+  `).get(type, currentVersion).count;
+
   const rows = db.prepare(`
     SELECT id, source_text, ai_metadata, ai_description, final_metadata, final_description
     FROM runs
     WHERE type = ? AND prompt_version = ? AND final_metadata IS NOT NULL
     ORDER BY id DESC
-  `).all(type, currentVersion);
+    LIMIT ?
+  `).all(type, currentVersion, MAX_EXAMPLES);
 
   if (rows.length === 0) {
     console.log(`No published ${type} runs on prompt version "${currentVersion}" with a captured final snapshot yet.`);
@@ -45,7 +56,10 @@ async function main() {
     return;
   }
 
-  console.log(`Found ${rows.length} ${type} run(s) with before/after data on ${currentVersion}. Asking Claude to analyze...`);
+  const sampleNote = totalCount > rows.length
+    ? ` — using the ${rows.length} most recent (of ${totalCount} total; capped to avoid a too-long prompt)`
+    : '';
+  console.log(`Found ${totalCount} ${type} run(s) with before/after data on ${currentVersion}${sampleNote}. Asking Claude to analyze...`);
 
   const examples = rows.map((r) => ({
     aiDraft: { metadata: JSON.parse(r.ai_metadata), description: r.ai_description },
