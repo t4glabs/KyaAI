@@ -4,8 +4,8 @@ const path = require('path');
 const PROMPTS_DIR = path.join(__dirname, '..', '..', 'prompts');
 
 const PROMPT_FILES = {
-  job: 'job-prompt.v4.md',
-  company: 'company-prompt.v2.md',
+  job: 'job-prompt.v5.md',
+  company: 'company-prompt.v3.md',
 };
 
 /**
