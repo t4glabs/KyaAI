@@ -13,6 +13,7 @@ const {
   finishQualityCheck,
   addQualityCheckResult,
   getLatestQualityResultPerJob,
+  qualityResultKey,
 } = require('./db');
 
 const RECENT_LIMIT = 25;
@@ -117,7 +118,7 @@ async function runQualityCheckBatch(limit = RECENT_LIMIT) {
 
   try {
     for (const job of jobs) {
-      const result = await auditOneJob(job, previousResults.get(job.id));
+      const result = await auditOneJob(job, previousResults.get(qualityResultKey(job.documentId, job.id)));
       addQualityCheckResult(checkId, result);
     }
   } finally {
@@ -147,7 +148,7 @@ async function runQualityCheckOne(jobId) {
   }
 
   const checkId = startQualityCheck(1);
-  const previous = getLatestQualityResultPerJob().get(job.id);
+  const previous = getLatestQualityResultPerJob().get(qualityResultKey(job.documentId, job.id));
 
   try {
     const result = await auditOneJob(job, previous);
@@ -185,7 +186,7 @@ async function runQualityCheckByUrl(url) {
   }
 
   const checkId = startQualityCheck(1);
-  const previous = getLatestQualityResultPerJob().get(job.id);
+  const previous = getLatestQualityResultPerJob().get(qualityResultKey(job.documentId, job.id));
 
   try {
     const result = await auditOneJob(job, previous);

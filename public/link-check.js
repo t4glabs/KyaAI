@@ -21,11 +21,17 @@ function renderRow(r, { dismissed }) {
   const typeTag = r.linkType ? `<span class="badge-pill" title="${escapeHtml(r.linkType.host)}">${escapeHtml(r.linkType.label)}</span>` : '';
   const url = escapeHtml(r.application_url);
 
-  const actionBtn = dismissed
-    ? `<button class="copy-btn" data-action="undismiss" data-job-id="${r.job_id}">Un-dismiss</button>`
-    : `<button class="copy-btn" data-action="dismiss" data-job-id="${r.job_id}" data-url="${url}">Dismiss</button>`;
-  const noteBtn = dismissed
-    ? `<button class="copy-btn" data-action="save-note" data-job-id="${r.job_id}" data-url="${url}">Save note</button>`
+  // Dismissals are keyed by documentId; a result from a check run before
+  // documentIds were recorded has none, so it can't be (un)dismissed until
+  // the next check.
+  const ids = r.document_id ? `data-document-id="${escapeHtml(r.document_id)}" data-job-id="${r.job_id}"` : '';
+  const actionBtn = !r.document_id
+    ? ''
+    : dismissed
+      ? `<button class="copy-btn" data-action="undismiss" ${ids}>Un-dismiss</button>`
+      : `<button class="copy-btn" data-action="dismiss" ${ids} data-url="${url}">Dismiss</button>`;
+  const noteBtn = dismissed && r.document_id
+    ? `<button class="copy-btn" data-action="save-note" ${ids} data-url="${url}">Save note</button>`
     : '';
 
   return `
@@ -121,18 +127,23 @@ async function handleActionClick(e) {
   const btn = e.target.closest('button[data-action]');
   if (!btn) return;
 
+  const documentId = encodeURIComponent(btn.dataset.documentId);
   const jobId = btn.dataset.jobId;
   const action = btn.dataset.action;
 
   if (action === 'dismiss' || action === 'save-note') {
     const noteInput = btn.closest('.field-box')?.querySelector('.note-input');
-    await fetch(`/api/link-check/${jobId}/dismiss`, {
+    await fetch(`/api/link-check/${documentId}/dismiss`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ applicationUrl: btn.dataset.url, note: noteInput?.value.trim() || null }),
+      body: JSON.stringify({ jobId, applicationUrl: btn.dataset.url, note: noteInput?.value.trim() || null }),
     });
   } else if (action === 'undismiss') {
-    await fetch(`/api/link-check/${jobId}/undismiss`, { method: 'POST' });
+    await fetch(`/api/link-check/${documentId}/undismiss`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jobId }),
+    });
   }
   loadLatest();
 }

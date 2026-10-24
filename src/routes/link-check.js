@@ -32,13 +32,20 @@ router.get('/link-check/latest', (req, res) => {
   res.json(check);
 });
 
-router.post('/link-check/:jobId/dismiss', (req, res) => {
-  dismissJobLink(Number(req.params.jobId), req.body?.applicationUrl, req.body?.note);
+// Keyed by the job's Strapi documentId — its numeric id changes on every
+// re-publish in Strapi 5. jobId rides along only to replace a dismissal row
+// saved before documentIds were recorded.
+router.post('/link-check/:documentId/dismiss', (req, res) => {
+  dismissJobLink(req.params.documentId, {
+    jobId: Number(req.body?.jobId) || null,
+    applicationUrl: req.body?.applicationUrl,
+    note: req.body?.note,
+  });
   res.json({ ok: true });
 });
 
-router.post('/link-check/:jobId/undismiss', (req, res) => {
-  undismissJobLink(Number(req.params.jobId));
+router.post('/link-check/:documentId/undismiss', (req, res) => {
+  undismissJobLink(req.params.documentId, { jobId: Number(req.body?.jobId) || null });
   res.json({ ok: true });
 });
 

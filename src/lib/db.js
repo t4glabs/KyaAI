@@ -71,14 +71,19 @@ db.exec(`
   );
 `);
 
-db.exec(`
+// Keyed by Strapi documentId: in Strapi 5 a job's numeric id changes every
+// time it's re-published, which would silently drop its dismissal.
+const LINK_DISMISSALS_SCHEMA = `
   CREATE TABLE IF NOT EXISTS link_dismissals (
-    job_id INTEGER PRIMARY KEY,   -- one dismissal per job, not per check run
+    document_id TEXT UNIQUE,      -- one dismissal per job (Strapi documentId), not per check run
+    job_id INTEGER,               -- numeric id at dismissal time; only used to match rows saved
+                                  -- before document_id existed and not yet backfilled
     application_url TEXT,         -- the exact link that was dismissed — see getLatestLinkCheck
     dismissed_at TEXT NOT NULL,
     note TEXT                     -- freeform, e.g. "known bit.ly false positive, verified working"
   );
-`);
+`;
+db.exec(LINK_DISMISSALS_SCHEMA);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS quality_checks (
@@ -139,6 +144,21 @@ if (!existingLinkCheckColumns.has('error')) {
 const existingDismissalColumns = new Set(db.prepare('PRAGMA table_info(link_dismissals)').all().map((c) => c.name));
 if (!existingDismissalColumns.has('note')) {
   db.exec(`ALTER TABLE link_dismissals ADD COLUMN note TEXT`);
+  existingDismissalColumns.add('note');
+}
+// The pre-Strapi-5 table had job_id as its PRIMARY KEY, which ADD COLUMN
+// can't change — rebuild it once with the documentId-keyed schema, keeping
+// every row. document_id starts NULL; backfill-document-ids.js fills it in.
+if (!existingDismissalColumns.has('document_id')) {
+  db.transaction(() => {
+    db.exec('ALTER TABLE link_dismissals RENAME TO link_dismissals_v4');
+    db.exec(LINK_DISMISSALS_SCHEMA);
+    db.exec(`
+      INSERT INTO link_dismissals (job_id, application_url, dismissed_at, note)
+      SELECT job_id, application_url, dismissed_at, note FROM link_dismissals_v4
+    `);
+    db.exec('DROP TABLE link_dismissals_v4');
+  })();
 }
 
 // Stored alongside job_id so the "open in Strapi" links can use the Strapi 5
@@ -291,16 +311,25 @@ function addLinkCheckResult(checkId, { jobId, documentId, title, slug, applicati
   });
 }
 
-function dismissJobLink(jobId, applicationUrl, note) {
-  db.prepare(`
-    INSERT INTO link_dismissals (job_id, application_url, dismissed_at, note)
-    VALUES (@jobId, @applicationUrl, @dismissedAt, @note)
-    ON CONFLICT(job_id) DO UPDATE SET application_url = excluded.application_url, dismissed_at = excluded.dismissed_at, note = excluded.note
-  `).run({ jobId, applicationUrl: applicationUrl || null, dismissedAt: new Date().toISOString(), note: note || null });
+function dismissJobLink(documentId, { jobId, applicationUrl, note } = {}) {
+  db.transaction(() => {
+    // Replace any not-yet-backfilled row for the same job rather than
+    // leaving a duplicate behind.
+    if (jobId) {
+      db.prepare('DELETE FROM link_dismissals WHERE document_id IS NULL AND job_id = ?').run(jobId);
+    }
+    db.prepare(`
+      INSERT INTO link_dismissals (document_id, job_id, application_url, dismissed_at, note)
+      VALUES (@documentId, @jobId, @applicationUrl, @dismissedAt, @note)
+      ON CONFLICT(document_id) DO UPDATE SET job_id = excluded.job_id, application_url = excluded.application_url,
+        dismissed_at = excluded.dismissed_at, note = excluded.note
+    `).run({ documentId, jobId: jobId || null, applicationUrl: applicationUrl || null, dismissedAt: new Date().toISOString(), note: note || null });
+  })();
 }
 
-function undismissJobLink(jobId) {
-  db.prepare(`DELETE FROM link_dismissals WHERE job_id = ?`).run(jobId);
+function undismissJobLink(documentId, { jobId } = {}) {
+  db.prepare('DELETE FROM link_dismissals WHERE document_id = ? OR (document_id IS NULL AND job_id = ?)')
+    .run(documentId, jobId || null);
 }
 
 /**
@@ -319,11 +348,13 @@ function getLatestLinkCheck() {
   const results = db.prepare(`
     SELECT * FROM link_check_results WHERE check_id = ? ORDER BY ok ASC, id ASC
   `).all(check.id);
-  const dismissals = new Map(
-    db.prepare(`SELECT * FROM link_dismissals`).all().map((d) => [d.job_id, d])
-  );
+  // Matched by documentId; rows saved before documentId existed (and not yet
+  // backfilled) still match on job_id so they don't vanish in the meantime.
+  const allDismissals = db.prepare(`SELECT * FROM link_dismissals`).all();
+  const byDocument = new Map(allDismissals.filter((d) => d.document_id).map((d) => [d.document_id, d]));
+  const byLegacyJobId = new Map(allDismissals.filter((d) => !d.document_id).map((d) => [d.job_id, d]));
   const annotated = results.map((r) => {
-    const dismissal = dismissals.get(r.job_id);
+    const dismissal = (r.document_id && byDocument.get(r.document_id)) || byLegacyJobId.get(r.job_id);
     const stillApplies = dismissal && (!dismissal.application_url || dismissal.application_url === r.application_url);
     return {
       ...r,
@@ -397,17 +428,24 @@ function addQualityCheckResult(checkId, result) {
  * (Lighthouse audits a live page one at a time on shared hardware), so a
  * routine re-run over all published jobs should mostly be free.
  */
+/** Per-job key for quality results: the Strapi documentId, which survives
+ * re-publishing (the numeric job_id doesn't in Strapi 5). Rows saved before
+ * document_id existed fall back to their job_id. */
+function qualityResultKey(documentId, jobId) {
+  return documentId || `job:${jobId}`;
+}
+
 function getLatestQualityResultPerJob() {
   const rows = db.prepare(`
     SELECT r1.*
     FROM quality_check_results r1
     INNER JOIN (
-      SELECT job_id, MAX(id) AS max_id
+      SELECT COALESCE(document_id, 'job:' || job_id) AS job_key, MAX(id) AS max_id
       FROM quality_check_results
-      GROUP BY job_id
-    ) latest ON r1.job_id = latest.job_id AND r1.id = latest.max_id
+      GROUP BY job_key
+    ) latest ON r1.id = latest.max_id
   `).all();
-  return new Map(rows.map((r) => [r.job_id, parseResultRow(r)]));
+  return new Map(rows.map((r) => [qualityResultKey(r.document_id, r.job_id), parseResultRow(r)]));
 }
 
 function parseResultRow(r) {
@@ -470,6 +508,7 @@ module.exports = {
   finishQualityCheck,
   addQualityCheckResult,
   getLatestQualityResultPerJob,
+  qualityResultKey,
   listLatestQualityResults,
   getLatestQualityCheck,
 };

@@ -22,6 +22,11 @@ const { strapiGet, slugify } = require('./lib/strapi');
  *   3. Companies only: slug of the pushed name — covers upsert *updates* of
  *      an existing company, where createdAt is long before the push.
  * Anything still ambiguous is left NULL and listed, rather than guessed.
+ *
+ * Then does the same for link_dismissals, link_check_results and
+ * quality_check_results, which were keyed by the numeric job id. Those
+ * resolve by slug first (stable across re-publishes), then by numeric id,
+ * against one bulk fetch of every job.
  */
 const APPLY = process.argv.includes('--apply');
 const CREATED_WINDOW_MS = 2 * 60 * 1000;
@@ -88,6 +93,91 @@ async function main() {
   if (unresolved.length > 0) {
     console.log(`Left unresolved (${unresolved.length}) — most likely deleted from Strapi:`);
     for (const line of unresolved) console.log(`  ${line}`);
+  }
+
+  await backfillJobKeyedTables();
+}
+
+/** slug → documentId and numeric id → documentId for every job, across both
+ * draft and published versions. Slugs that map to more than one document
+ * are dropped as ambiguous. */
+async function loadJobIndex() {
+  const bySlug = new Map();
+  const ambiguous = new Set();
+  const byId = new Map();
+  for (const status of ['draft', 'published']) {
+    for (let page = 1; ; page += 1) {
+      const { data, meta } = await strapiGet(`/jobs?status=${status}&fields[0]=slug&pagination[pageSize]=100&pagination[page]=${page}`);
+      for (const e of data) {
+        byId.set(e.id, e.documentId);
+        if (!e.slug) continue;
+        if (bySlug.has(e.slug) && bySlug.get(e.slug) !== e.documentId) ambiguous.add(e.slug);
+        bySlug.set(e.slug, e.documentId);
+      }
+      if (page >= (meta?.pagination?.pageCount ?? 1)) break;
+    }
+  }
+  for (const slug of ambiguous) bySlug.delete(slug);
+  return { bySlug, byId };
+}
+
+async function backfillJobKeyedTables() {
+  const { bySlug, byId } = await loadJobIndex();
+  const resolveJob = (slug, jobId) => (slug && bySlug.get(slug)) || byId.get(jobId) || null;
+
+  for (const table of ['link_check_results', 'quality_check_results']) {
+    const rows = db.prepare(`SELECT id, job_id, slug FROM ${table} WHERE document_id IS NULL`).all();
+    const update = db.prepare(`UPDATE ${table} SET document_id = ? WHERE id = ? AND document_id IS NULL`);
+    let resolved = 0;
+    db.transaction(() => {
+      for (const r of rows) {
+        const documentId = resolveJob(r.slug, r.job_id);
+        if (!documentId) continue;
+        resolved += 1;
+        if (APPLY) update.run(documentId, r.id);
+      }
+    })();
+    console.log(`${table}: ${resolved}/${rows.length} row(s) resolved`);
+  }
+
+  // Dismissals don't store a slug — take it from the latest link-check
+  // result for the same job_id.
+  const dismissals = db.prepare(`
+    SELECT d.rowid AS rowid, d.job_id, d.dismissed_at,
+      (SELECT slug FROM link_check_results r WHERE r.job_id = d.job_id AND r.slug IS NOT NULL ORDER BY r.id DESC LIMIT 1) AS slug
+    FROM link_dismissals d
+    WHERE d.document_id IS NULL
+  `).all();
+  const existing = db.prepare('SELECT rowid, dismissed_at FROM link_dismissals WHERE document_id = ?');
+  const setDoc = db.prepare('UPDATE link_dismissals SET document_id = ? WHERE rowid = ?');
+  const remove = db.prepare('DELETE FROM link_dismissals WHERE rowid = ?');
+  const stats = { resolved: 0, mergedDuplicates: 0, unresolved: [] };
+  db.transaction(() => {
+    for (const d of dismissals) {
+      const documentId = resolveJob(d.slug, d.job_id);
+      if (!documentId) {
+        stats.unresolved.push(`job #${d.job_id}${d.slug ? ` (${d.slug})` : ''}`);
+        continue;
+      }
+      stats.resolved += 1;
+      if (!APPLY) continue;
+      // The same job dismissed under two numeric ids (re-published in
+      // between) — keep the more recent dismissal.
+      const other = existing.get(documentId);
+      if (other) {
+        stats.mergedDuplicates += 1;
+        if (other.dismissed_at >= d.dismissed_at) {
+          remove.run(d.rowid);
+          continue;
+        }
+        remove.run(other.rowid);
+      }
+      setDoc.run(documentId, d.rowid);
+    }
+  })();
+  console.log(`link_dismissals: ${stats.resolved}/${dismissals.length} resolved, ${stats.mergedDuplicates} duplicate(s) merged`);
+  if (stats.unresolved.length > 0) {
+    console.log(`  left as-is (still matched by numeric id): ${stats.unresolved.join(', ')}`);
   }
 }
 
