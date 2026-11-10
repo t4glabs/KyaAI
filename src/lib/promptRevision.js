@@ -100,7 +100,7 @@ the specific patterns from your analysis above.`;
   // and drafting a full replacement prompt file in one shot is heavier than
   // the interactive compose path, so give it much more room than the
   // default 120s before giving up.
-  const rawOutput = await runClaude(analysisPrompt, 10 * 60_000);
+  const rawOutput = await runClaude(analysisPrompt, 10 * 60_000, { effort: 'high' });
 
   const outFileName = `${type}-prompt.v${nextVersionNumber(type)}.proposed.md`;
   const outPath = path.join(PROMPTS_DIR, outFileName);

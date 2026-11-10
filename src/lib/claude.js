@@ -1,15 +1,20 @@
 const { spawn } = require('child_process');
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude';
-const TIMEOUT_MS = 120_000;
+const TIMEOUT_MS = 240_000;
+// Pinned so the machine's interactive Claude settings (e.g. xhigh effort)
+// don't silently slow every draft down — formatting doesn't need deep thinking.
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'opus';
+const DEFAULT_EFFORT = process.env.CLAUDE_EFFORT || 'medium';
 
 /**
  * Runs `claude -p` non-interactively with the given prompt piped in via stdin,
  * and returns the raw stdout text. Uses the subscription CLI, not the metered API.
  */
-function runClaude(fullPrompt, timeoutMs = TIMEOUT_MS) {
+function runClaude(fullPrompt, timeoutMs = TIMEOUT_MS, { effort = DEFAULT_EFFORT } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(CLAUDE_BIN, ['-p', '--output-format', 'text'], {
+    const args = ['-p', '--output-format', 'text', '--model', CLAUDE_MODEL, '--effort', effort];
+    const child = spawn(CLAUDE_BIN, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
