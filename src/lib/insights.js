@@ -70,6 +70,49 @@ function computeFieldStats(type) {
   };
 }
 
+/**
+ * One prompt version's "how much did humans have to fix" score: the share
+ * of schema fields and of descriptions that differ between the AI draft and
+ * what was published. Lower is better. Used by auto-revise.js to decide
+ * whether a new version actually beat the one before it.
+ */
+function computeVersionScore(type, promptVersion) {
+  const rows = db.prepare(`
+    SELECT ai_metadata, final_metadata, ai_description, final_description, created_at
+    FROM runs
+    WHERE type = ? AND prompt_version = ? AND final_metadata IS NOT NULL
+  `).all(type, promptVersion);
+
+  let fieldsChanged = 0;
+  let fieldsTotal = 0;
+  let descriptionsChanged = 0;
+  let runs = 0;
+  for (const row of rows) {
+    const aiMeta = JSON.parse(row.ai_metadata);
+    if (aiMeta._note) continue; // no real metadata baseline
+    const finalMeta = JSON.parse(row.final_metadata);
+    runs += 1;
+    for (const key of new Set([...Object.keys(aiMeta), ...Object.keys(finalMeta)])) {
+      if (NON_SCHEMA_FIELDS.has(key)) continue;
+      fieldsTotal += 1;
+      if (!valuesEqual(aiMeta[key], finalMeta[key])) fieldsChanged += 1;
+    }
+    if ((row.ai_description || '').trim() !== (row.final_description || '').trim()) {
+      descriptionsChanged += 1;
+    }
+  }
+
+  const firstRunAt = db.prepare('SELECT MIN(created_at) AS t FROM runs WHERE type = ? AND prompt_version = ?')
+    .get(type, promptVersion).t;
+  return {
+    promptVersion,
+    runs,
+    fieldEditPct: fieldsTotal ? (100 * fieldsChanged) / fieldsTotal : null,
+    descriptionEditPct: runs ? (100 * descriptionsChanged) / runs : null,
+    firstRunAt,
+  };
+}
+
 function getActivityCounts(type) {
   const totalRuns = db.prepare('SELECT COUNT(*) AS n FROM runs WHERE type = ?').get(type).n;
   const pushedCount = db.prepare('SELECT COUNT(*) AS n FROM runs WHERE type = ? AND strapi_entry_id IS NOT NULL').get(type).n;
@@ -123,4 +166,4 @@ function getInsights(type) {
   };
 }
 
-module.exports = { getInsights };
+module.exports = { getInsights, computeVersionScore };

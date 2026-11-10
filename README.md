@@ -167,6 +167,48 @@ To approve a proposal: read it, and if it looks right, remove the
 prompt" workflow — drafting the revision is Claude's job, approving it is
 Jinso's, and there's no manual prompt-writing in between.
 
+### Automatic weekly revisions (`src/auto-revise.js`)
+
+On the production host this loop runs by itself every Monday at 06:00
+(LaunchAgent `space.aikyam.prompt-autorevise`; if the Mac is asleep, it
+runs on wake). Output goes to `logs/auto-revise.log`. For each type, one
+at a time:
+
+1. **Waits for evidence.** Nothing happens until the active version has
+   been live at least 7 days and has at least 30 published job runs (15 for
+   companies). At current volume that's roughly a weekly job revision and a
+   company revision every 1–2 weeks.
+2. **Rolls back if a version made things worse.** The score is the share of
+   fields and descriptions operators edited before publishing (lower is
+   better; also on the Insights page). If the active version scores more
+   than 3 points worse on fields, or 10 worse on descriptions, than the
+   previous version with enough data, it's renamed `…vN.rolledback.md` and
+   the previous version goes back live.
+3. **Otherwise drafts and tests a new version.** Same step as
+   `suggest-revision`, then two gates. The structure check covers markers,
+   sections, a changelog (so it isn't truncated), a sane length and an
+   intact output format. Then three recent real inputs are drafted with it
+   through the same parser the Compose button uses, and every field the
+   current prompt outputs must still be there. Any failure leaves the
+   active prompt alone and keeps the proposal in
+   `logs/auto-revise-rejected/`. A proposal that changes the output fields
+   is always rejected, so that kind of change still needs a person.
+4. **Ships it:** renames the file, updates `PROMPT_FILES`, commits, pushes
+   and restarts the Composer.
+
+It won't run while `prompts/` or `promptLoader.js` has uncommitted manual
+edits, and it never runs two Claude jobs at once. Each revision costs one
+long Claude call plus three normal drafts.
+
+```bash
+node src/auto-revise.js --check-only   # what would it decide right now? (no Claude, no changes)
+node src/auto-revise.js --dry-run      # generate + test a proposal, apply nothing
+launchctl kickstart gui/$(id -u)/space.aikyam.prompt-autorevise   # run the real thing now
+```
+
+The thresholds are constants at the top of `src/auto-revise.js`.
+`npm run suggest-revision` still works for a manual, reviewed pass.
+
 ## Seeing what's actually happening (Insights page)
 
 `http://localhost:4100/insights.html` (linked from the Composer page) shows,

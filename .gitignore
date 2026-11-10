@@ -4,3 +4,4 @@ data/*.sqlite
 data/*.sqlite-journal
 *.log
 .DS_Store
+logs/auto-revise-rejected/

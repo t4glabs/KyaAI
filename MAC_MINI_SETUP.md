@@ -318,6 +318,26 @@ the latest snapshot somewhere off the machine.
 To restore: stop the server (`launchctl bootout gui/$(id -u)/space.aikyam.job-composer`),
 copy a snapshot over `data/composer.sqlite`, then bootstrap it again.
 
+## 8. Weekly automatic prompt revisions
+
+See README's "Automatic weekly revisions" for what it does. The
+LaunchAgent is `~/Library/LaunchAgents/space.aikyam.prompt-autorevise.plist`.
+It has the same node path and the **same `PATH` entry** as step 4, because
+it calls the Claude CLI, `git` (which pushes with the GitHub token in the
+macOS Keychain) and `launchctl` (to restart the Composer). It runs
+`src/auto-revise.js` from `~/Desktop/KyaAI` with `StartCalendarInterval`
+Weekday 1 / Hour 6 / Minute 0, and logs to `logs/auto-revise.log`.
+
+```bash
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/space.aikyam.prompt-autorevise.plist
+node src/auto-revise.js --check-only        # sanity check: what it would decide now
+tail -30 ~/Desktop/KyaAI/logs/auto-revise.log
+```
+
+If the GitHub token expires, revisions still apply and the Composer still
+restarts, but the log shows `WARNING: push failed`. Push those commits by
+hand once there's a new token.
+
 ## Deploying an update
 
 `git pull` alone is **not enough** — static files (`public/*.html`, `*.js`,
@@ -344,8 +364,8 @@ away. If you change the plist itself, you need
 `launchctl bootout gui/$(id -u)/space.aikyam.job-composer` and then
 `bootstrap` again.)
 
-If Node is upgraded through nvm, the hardcoded node path in **both**
-`space.aikyam.job-composer.plist` and `space.aikyam.composer-backup.plist`
+If Node is upgraded through nvm, the hardcoded node path in **every**
+`space.aikyam.*.plist` (job-composer, composer-backup, prompt-autorevise)
 has to be updated.
 
 Verify the same way as initial setup: `tail -20 ~/Desktop/KyaAI/logs/out.log`
