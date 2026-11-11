@@ -36,6 +36,14 @@ unrelated and untouched by this setup.)
   subscription** on this machine. This is not optional — every format call
   shells out to `claude -p` locally, using whatever account is logged in
   here. Check with `claude --version` and `claude -p "say ok"`.
+- A Chrome for the Quality tab's Lighthouse audits. If Google Chrome isn't
+  installed (the error is "No Chrome installations found"), install Chrome
+  for Testing without admin rights:
+  `node node_modules/@puppeteer/browsers/lib/cjs/main-cli.js install chrome@stable --path ~/.local/share/chrome-for-testing`,
+  then set `CHROME_PATH` in `.env` to the binary path it prints. Use the real
+  path inside the `.app`: a symlink breaks Chrome's framework loading and
+  fails with `ECONNREFUSED`. It doesn't auto-update, so re-run this
+  occasionally and update `CHROME_PATH`.
 - Git access to `https://github.com/t4glabs/KyaAI`.
 - A Cloudflare account with the team's domain (e.g. `aikyamjobs.org` or
   whichever is actually on Cloudflare's nameservers) already added — it
