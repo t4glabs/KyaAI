@@ -22,6 +22,17 @@ const RECENT_LIMIT = 25;
 // longer list to pick one on-demand job costs nothing, unlike auditing all
 // of them in a batch, which spends real Claude/Lighthouse cost per job.
 const PICKER_LIMIT = 30;
+// Claude scoring (~35s/job) is the slow part and is safe to run side by
+// side; Lighthouse shares one headless Chrome, so it's serialized below.
+const CONCURRENCY = 3;
+
+let lighthouseQueue = Promise.resolve();
+/** Runs Lighthouse audits one at a time, even when jobs are scored in parallel. */
+function auditUrlSerialized(url) {
+  const run = lighthouseQueue.then(() => auditUrl(url));
+  lighthouseQueue = run.catch(() => {});
+  return run;
+}
 
 /**
  * Scores one job's content and audits its live page, unless it's unchanged
@@ -63,7 +74,7 @@ async function auditOneJob(job, previous) {
   let lighthouseResult = null;
   let lighthouseError = null;
   try {
-    lighthouseResult = await auditUrl(publicJobUrl(job.slug));
+    lighthouseResult = await auditUrlSerialized(publicJobUrl(job.slug));
   } catch (err) {
     lighthouseError = err.message;
   }
@@ -116,11 +127,19 @@ async function runQualityCheckBatch(limit = RECENT_LIMIT) {
 
   const previousResults = getLatestQualityResultPerJob();
 
-  try {
-    for (const job of jobs) {
+  let index = 0;
+  async function worker() {
+    while (index < jobs.length) {
+      const job = jobs[index];
+      index += 1;
       const result = await auditOneJob(job, previousResults.get(qualityResultKey(job.documentId, job.id)));
       addQualityCheckResult(checkId, result);
     }
+  }
+
+  try {
+    const workerCount = Math.min(CONCURRENCY, jobs.length) || 1;
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
   } finally {
     await closeChrome();
   }

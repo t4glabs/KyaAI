@@ -386,6 +386,19 @@ function finishQualityCheck(checkId, error) {
     .run(new Date().toISOString(), error || null, checkId);
 }
 
+/**
+ * Called once at server startup: a check still marked 'running' then can
+ * only be left over from a restart mid-check (e.g. a deploy), and would
+ * otherwise block every future check forever.
+ */
+function closeInterruptedChecks() {
+  const now = new Date().toISOString();
+  for (const table of ['link_checks', 'quality_checks']) {
+    db.prepare(`UPDATE ${table} SET finished_at = ?, status = 'done', error = ? WHERE status = 'running'`)
+      .run(now, 'Interrupted by a server restart — run it again.');
+  }
+}
+
 function addQualityCheckResult(checkId, result) {
   db.prepare(`
     INSERT INTO quality_check_results (
@@ -511,4 +524,5 @@ module.exports = {
   qualityResultKey,
   listLatestQualityResults,
   getLatestQualityCheck,
+  closeInterruptedChecks,
 };
